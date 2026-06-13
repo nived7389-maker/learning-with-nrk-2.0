@@ -1,0 +1,20 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+[[redirects]]
+  # Route API requests to the Netlify serverless function
+  from = "/api/gemini/chat"
+  to = "/.netlify/functions/chat"
+  status = 200
+  force = true
+
+[[redirects]]
+  # SPA fallback for React Router - must be the last redirect rule
+  from = "/*"
+  to = "/index.html"
+  status = 200

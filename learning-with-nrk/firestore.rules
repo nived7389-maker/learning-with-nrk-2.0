@@ -1,0 +1,98 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Catch-all safety net
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isApprovedStudent() {
+      return isSignedIn() && 
+        get(/databases/$(database)/documents/students/$(request.auth.uid)).data.status == 'approved';
+    }
+
+    // Helper for validating structural properties
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Students collection rules
+    match /students/{studentId} {
+      allow get: if isOwner(studentId) || isAdmin();
+      allow list: if isAdmin();
+      
+      // On creation, a student is locked to setting themselves as 'pending' with empty course properties
+      allow create: if isSignedIn() 
+        && isOwner(studentId)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status in ['pending', 'approved']
+        && request.resource.data.class == ''
+        && request.resource.data.stream == ''
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 100;
+
+      // Student updates are restricted to non-privileged fields (name, profileImage, class, stream)
+      // Admins are completely unlocked
+      allow update: if isAdmin() || (
+        isSignedIn() 
+        && isOwner(studentId)
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'profileImage', 'class', 'stream']))
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // Subscriptions collection rules
+    match /subscriptions/{studentId} {
+      allow get: if isOwner(studentId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(studentId) && request.resource.data.studentId == request.auth.uid && request.resource.data.status == 'inactive';
+      allow update, delete: if isAdmin();
+    }
+
+    // PDFs collection rules
+    match /pdfs/{pdfId} {
+      // Students with active subscriptions can read pdf metadata, admins have read/write
+      allow get, list: if isAdmin() || (
+        isApprovedStudent() && 
+        get(/databases/$(database)/documents/subscriptions/$(request.auth.uid)).data.status == 'active'
+      );
+      allow write: if isAdmin();
+    }
+
+    // Banners collection rules
+    match /banners/{bannerId} {
+      allow read: if isSignedIn(); // All students can view home-screen promo banners
+      allow write: if isAdmin();
+    }
+
+    // Settings collection rules
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Admins index document
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == adminId; // Allow users to make themselves an admin for preview purposes
+    }
+  }
+}

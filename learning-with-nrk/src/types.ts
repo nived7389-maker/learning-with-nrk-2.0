@@ -1,0 +1,52 @@
+export interface Student {
+  uid: string;
+  name: string;
+  email: string;
+  phone?: string;
+  profileImage: string;
+  registeredAt: string; // ISO String
+  class: "+1" | "+2" | "";
+  stream: "Computer Science" | "Biology Science" | "";
+  status: "pending" | "approved" | "blocked";
+  activeDeviceId?: string;
+}
+
+export interface PdfAsset {
+  id: string;
+  title: string;
+  class: "+1" | "+2";
+  stream: "Computer Science" | "Biology Science";
+  subject: string;
+  pdfUrl: string;
+  fileName: string;
+  uploadedAt: string; // ISO String
+}
+
+export interface BannerAsset {
+  id: string;
+  imageUrl: string;
+  active: boolean;
+  updatedAt: string; // ISO String
+}
+
+export interface Subscription {
+  studentId: string;
+  status: "active" | "inactive";
+  updatedAt: string; // ISO String
+}
+
+export type SubjectName = 
+  | "Physics" 
+  | "Chemistry" 
+  | "Mathematics" 
+  | "English" 
+  | "Malayalam" 
+  | "Computer Science" 
+  | "Biology"
+  | "Hindi";
+
+export interface SubjectConfig {
+  name: SubjectName;
+  icon: string; // lucide icon name or emoji
+  color: string; // Tailwind class
+}

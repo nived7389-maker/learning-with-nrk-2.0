@@ -1,0 +1,48 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && firestore.exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isApprovedStudent() {
+      return isSignedIn() && 
+        firestore.get(/databases/$(database)/documents/students/$(request.auth.uid)).data.status == 'approved';
+    }
+
+    function hasActiveSubscription() {
+      return isSignedIn() &&
+        firestore.get(/databases/$(database)/documents/subscriptions/$(request.auth.uid)).data.status == 'active';
+    }
+
+    // Banner storage regulations
+    match /banners/{bannerId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // PDF files storage regulations
+    match /pdfs/{pdfId} {
+      allow read: if isAdmin() || (isApprovedStudent() && hasActiveSubscription());
+      allow write: if isAdmin();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if isAdmin();
+    }
+    match /profiles/{profileId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || (isSignedIn() && profileId.matches(request.auth.uid + '_.*'));
+    }
+  }
+}

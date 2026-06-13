@@ -1,0 +1,8 @@
+{
+  "name": "Learning With NRK",
+  "description": "Kerala State Syllabus Higher Secondary (+1 & +2) Science streams educational portal. Real-time study materials, PDF manager, subscription controls, and dedicated admin controls.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

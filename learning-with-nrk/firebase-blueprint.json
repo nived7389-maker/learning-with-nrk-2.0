@@ -1,0 +1,91 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Student user details including enrollment status, stream, and class assignments.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "profileImage": { "type": "string" },
+        "registeredAt": { "type": "string", "format": "date-time" },
+        "class": { "type": "string", "enum": ["+1", "+2", ""] },
+        "stream": { "type": "string", "enum": ["Computer Science", "Biology Science", ""] },
+        "status": { "type": "string", "enum": ["pending", "approved", "blocked"] }
+      },
+      "required": ["uid", "name", "email", "registeredAt", "status"]
+    },
+    "PdfAsset": {
+      "title": "PdfAsset",
+      "description": "Educational study material PDF uploaded by NRK admin.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "class": { "type": "string", "enum": ["+1", "+2"] },
+        "stream": { "type": "string", "enum": ["Computer Science", "Biology Science"] },
+        "subject": { "type": "string" },
+        "pdfUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "uploadedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "class", "stream", "subject", "pdfUrl", "fileName", "uploadedAt"]
+    },
+    "Banner": {
+      "title": "Banner",
+      "description": "Dynamic promotional or informational banner content listed on the Home screen.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "title": { "type": "string" },
+        "active": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "imageUrl", "title", "active", "updatedAt"]
+    },
+    "Subscription": {
+      "title": "Subscription",
+      "description": "Durable study content subscription permissions mapping.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentId", "status", "updatedAt"]
+    },
+    "AdminSettings": {
+      "title": "AdminSettings",
+      "description": "Global settings for the application.",
+      "type": "object",
+      "properties": {
+        "customerCarePhone": { "type": "string" }
+      },
+      "required": ["customerCarePhone"]
+    }
+  },
+  "firestore": {
+    "students/{studentId}": {
+      "schema": "Student",
+      "description": "Profiles and status of Kerala HSE Science students."
+    },
+    "pdfs/{pdfId}": {
+      "schema": "PdfAsset",
+      "description": "Metadata of pdf files uploaded to Firebase Storage."
+    },
+    "banners/{bannerId}": {
+      "schema": "Banner",
+      "description": "Promo home banners managed by the admin."
+    },
+    "subscriptions/{studentId}": {
+      "schema": "Subscription",
+      "description": "Individual student access subscriptions."
+    },
+    "settings/{settingId}": {
+      "schema": "AdminSettings",
+      "description": "Metadata settings including helpline phones."
+    }
+  }
+}
