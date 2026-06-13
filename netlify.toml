@@ -7,6 +7,12 @@
   node_bundler = "esbuild"
 
 [[redirects]]
+  from = "/api/gemini/chat"
+  to = "/.netlify/functions/chat"
+  status = 200
+  force = true
+
+[[redirects]]
   # SPA fallback for React Router - must be the last redirect rule
   from = "/*"
   to = "/index.html"
