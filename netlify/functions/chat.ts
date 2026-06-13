@@ -40,7 +40,6 @@ export const handler = async (event: any, context: any) => {
       content: "You are ASTR AI, an educational assistant designed to help Kerala State Syllabus (+1 and +2) students clear their doubts. Be fast, very clear, and educational."
     });
 
-    // Format history
     if (history && Array.isArray(history)) {
       for (const msg of history) {
         messages.push({
@@ -50,7 +49,6 @@ export const handler = async (event: any, context: any) => {
       }
     }
 
-    // Format current request
     let currentContent: any = prompt || " ";
     if (base64Image) {
       currentContent = [
@@ -91,7 +89,6 @@ export const handler = async (event: any, context: any) => {
       body: JSON.stringify({ text: data.choices[0].message.content })
     };
   } catch (error: any) {
-    // Check if it's a quota error or 429
     const isQuota = error.status === 429 || (error.message && error.message.includes("429")) || (error.message && error.message.includes("Quota exceeded"));
     
     if (!isQuota) {
