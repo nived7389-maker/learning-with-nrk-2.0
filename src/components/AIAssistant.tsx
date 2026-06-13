@@ -246,7 +246,11 @@ export default function AIAssistant({ student, onBackToHome }: AIAssistantProps)
     setIsSending(true);
 
     try {
-      const response = await fetch("/api/gemini/chat", {
+      const endpoint = import.meta.env.PROD 
+        ? "/.netlify/functions/chat" 
+        : "/api/gemini/chat";
+
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
