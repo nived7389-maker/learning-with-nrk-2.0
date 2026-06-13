@@ -1,5 +1,4 @@
 export const handler = async (event: any, context: any) => {
-  // Specify CORS headers if needed, though they aren't strictly required if same-site
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
