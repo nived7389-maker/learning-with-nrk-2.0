@@ -15,6 +15,7 @@ import AIAssistant from "./components/AIAssistant";
 import VideoClass from "./components/VideoClass";
 import MicroBit from "./components/MicroBit";
 import { PaperCutsIcon } from "./components/PaperCutsIcon";
+import Onboarding from "./components/Onboarding";
 
 export default function App() {
   const [sessionState, setSessionState] = useState<"splash" | "login" | "waiting" | "portal" | "admin">("splash");
@@ -22,6 +23,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<"home" | "settings" | "video" | "microbit">("home");
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [showAIAssistant, setShowAIAssistant] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
@@ -51,7 +53,7 @@ export default function App() {
         try {
           const profile = await fetchStudentProfile(user.uid);
           if (profile) {
-            handleLoginSuccess(profile);
+            handleLoginSuccess(profile, false); // Auto-resume, not explicit login
           } else {
             if (!cachedProfileData) setSessionState("login");
           }
@@ -107,7 +109,7 @@ export default function App() {
     setSelectedSubject(null);
   };
 
-  const handleLoginSuccess = (student: Student) => {
+  const handleLoginSuccess = (student: Student, isExplicitLogin: boolean = false) => {
     localStorage.setItem("lrnk_student_profile", JSON.stringify(student));
     setCurrentUser(student);
     // User wants to always go to home page
@@ -115,6 +117,9 @@ export default function App() {
     
     if (student.status === "approved" || student.status === "pending") {
       setSessionState("portal");
+      if (isExplicitLogin) {
+        setShowOnboarding(true);
+      }
     } else {
       setSessionState("waiting");
     }
@@ -124,6 +129,7 @@ export default function App() {
     localStorage.setItem("lrnk_student_profile", JSON.stringify(approvedStudent));
     setCurrentUser(approvedStudent);
     setSessionState("portal");
+    setShowOnboarding(true);
   };
 
   const handleProfilUpdated = (updatedStudent: Student) => {
@@ -135,6 +141,14 @@ export default function App() {
     <div className="relative min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white selection:bg-indigo-500/30 selection:text-slate-900 dark:text-white">
       <AnimatePresence mode="wait">
         
+        {/* Onboarding Flow */}
+        {showOnboarding && sessionState === "portal" && (
+          <Onboarding 
+            onComplete={() => setShowOnboarding(false)} 
+            onCancel={() => setShowOnboarding(false)} 
+          />
+        )}
+
         {/* Splash loading screen */}
         {sessionState === "splash" && (
           <motion.div
@@ -151,7 +165,7 @@ export default function App() {
         {/* Login authentication screen */}
         {sessionState === "login" && (
           <Login
-            onSuccess={handleLoginSuccess}
+            onSuccess={(student) => handleLoginSuccess(student, true)}
             onAdminOpen={() => setSessionState("admin")}
           />
         )}
