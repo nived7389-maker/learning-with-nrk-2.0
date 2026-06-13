@@ -63,6 +63,8 @@ export const handler: Handler = async (event, context) => {
       content: currentContent
     });
 
+    const requestModel = base64Image ? "google/gemini-2.5-flash" : "deepseek/deepseek-chat";
+
     const openRouterResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -70,8 +72,9 @@ export const handler: Handler = async (event, context) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "deepseek/deepseek-chat",
-        messages: messages
+        model: requestModel,
+        messages: messages,
+        max_tokens: 2000
       })
     });
 
