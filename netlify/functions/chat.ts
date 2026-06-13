@@ -1,35 +1,32 @@
-export const handler = async (event: any, context: any) => {
-  const headers = {
+import type { Config, Context } from "@netlify/functions";
+
+export default async (req: Request, context: Context) => {
+  const headers = new Headers({
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-  };
+  });
 
-  if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 200, headers, body: "" };
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 200, headers });
   }
 
-  if (event.httpMethod !== "POST") {
-    return {
-      statusCode: 405,
-      headers,
-      body: JSON.stringify({ error: "Method Not Allowed" })
-    };
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method Not Allowed" }), { 
+      status: 405, 
+      headers 
+    });
   }
 
   try {
     const apiKey = (process.env.OPENROUTER_API_KEY || "").trim();
     if (!apiKey) {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ 
-          error: "OPENROUTER_API_KEY is not configured on the server. Please add your OpenRouter API Key in Netlify UI: Site settings > Environment variables." 
-        })
-      };
+      return new Response(JSON.stringify({ 
+        error: "OPENROUTER_API_KEY is not configured on the server. Please add your OpenRouter API Key in Netlify UI: Site settings > Environment variables." 
+      }), { status: 401, headers });
     }
 
-    const body = JSON.parse(event.body || "{}");
+    const body = await req.json();
     const { prompt, base64Image, mimeType, history } = body;
     
     const messages = [];
@@ -79,14 +76,10 @@ export const handler = async (event: any, context: any) => {
       throw new Error(data.error?.message || "Failed to generate response from OpenRouter");
     }
 
-    return {
-      statusCode: 200,
-      headers: {
-        ...headers,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ text: data.choices[0].message.content })
-    };
+    return new Response(JSON.stringify({ text: data.choices[0].message.content }), {
+      status: 200,
+      headers
+    });
   } catch (error: any) {
     const isQuota = error.status === 429 || (error.message && error.message.includes("429")) || (error.message && error.message.includes("Quota exceeded"));
     
@@ -94,13 +87,13 @@ export const handler = async (event: any, context: any) => {
       console.error("OpenRouter API Error in Netlify function:", error);
     }
     
-    return {
-      statusCode: isQuota ? 429 : 500,
-      headers: {
-        ...headers,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ error: error.message || "Failed to generate response." })
-    };
+    return new Response(JSON.stringify({ error: error.message || "Failed to generate response." }), {
+      status: isQuota ? 429 : 500,
+      headers
+    });
   }
+};
+
+export const config: Config = {
+  path: "/api/gemini/chat"
 };
