@@ -1,12 +1,20 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { BookOpen } from "lucide-react";
+import { listenAppConfig } from "../firebase";
 
 interface SplashProps {
   onFinish: () => void;
 }
 
 export default function Splash({ onFinish }: SplashProps) {
+  const [appConfig, setAppConfig] = useState<any>({});
+
+  useEffect(() => {
+    const unsub = listenAppConfig((config) => setAppConfig(config));
+    return () => unsub();
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       onFinish();
@@ -30,9 +38,13 @@ export default function Splash({ onFinish }: SplashProps) {
           initial={{ scale: 0.3, opacity: 0, rotate: -20 }}
           animate={{ scale: [1, 1.1, 1], opacity: 1, rotate: 0 }}
           transition={{ duration: 1.5, ease: "easeInOut" }}
-          className="flex items-center justify-center w-24 h-24 rounded-3xl bg-black/5 dark:bg-white/10 backdrop-blur-md shadow-2xl border border-slate-300 dark:border-white/20 mb-6"
+          className="flex items-center justify-center w-24 h-24 rounded-3xl bg-black/5 dark:bg-white/10 backdrop-blur-md shadow-2xl border border-slate-300 dark:border-white/20 mb-6 overflow-hidden"
         >
-          <BookOpen className="w-12 h-12 text-slate-900 dark:text-white" />
+          {appConfig?.appLogoUrl ? (
+            <img src={appConfig.appLogoUrl} alt="App Logo" className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
+          ) : (
+            <BookOpen className="w-12 h-12 text-slate-900 dark:text-white" />
+          )}
         </motion.div>
 
         {/* Animated App Name Title */}

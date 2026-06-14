@@ -21,6 +21,7 @@ import {
   BookOpen,
   Pencil,
   RefreshCw,
+  Bell,
 } from "lucide-react";
 import {
   getAdminDashboardStats,
@@ -28,6 +29,7 @@ import {
   adminApproveStudent,
   adminRejectStudent,
   adminUploadPDF,
+  adminUploadPDFFile,
   adminDeletePDF,
   adminUpdateBanner,
   adminDeleteBanner,
@@ -38,6 +40,8 @@ import {
   adminEditPDF,
   adminUpdateStudentCourse,
   isUsingLocalMock,
+  fetchAppConfig,
+  updateAppConfig
 } from "../firebase";
 import { Student, PdfAsset, BannerAsset, SubjectName } from "../types";
 
@@ -59,7 +63,20 @@ export default function Admin({ onReturn }: AdminProps) {
     | "banner"
     | "sub_manage"
     | "library"
+    | "app_config"
+    | "subject_logos"
+    | "pages_config"
+    | "notification_config"
   >("dashboard");
+
+  // App Config
+  const [appConfig, setAppConfig] = useState<any>({});
+  const [aboutText, setAboutText] = useState("");
+  const [helpText, setHelpText] = useState("");
+  const [appLogoUrl, setAppLogoUrl] = useState("");
+  const [subjectIcons, setSubjectIcons] = useState<Record<string, string>>({});
+  const [notificationTitle, setNotificationTitle] = useState("Notifications");
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   // Dashboard Stats State
   const [stats, setStats] = useState({
@@ -93,6 +110,7 @@ export default function Admin({ onReturn }: AdminProps) {
   >("Computer Science");
   const [pdfSubject, setPdfSubject] = useState<SubjectName>("Physics");
   const [pdfLink, setPdfLink] = useState("");
+  const [pdfPhysicalFile, setPdfPhysicalFile] = useState<File | null>(null);
   const [submittingFile, setSubmittingFile] = useState(false);
 
   // Banner Upload Form State
@@ -165,6 +183,15 @@ export default function Admin({ onReturn }: AdminProps) {
         ...chemistry_CSPLUS2,
         ...maths_CSPLUS2,
       ]);
+
+      const config = await fetchAppConfig();
+      setAppConfig(config);
+      setAboutText(config.aboutText || "");
+      setHelpText(config.helpText || "");
+      setAppLogoUrl(config.appLogoUrl || "");
+      setSubjectIcons(config.subjectIcons || {});
+      setNotificationTitle(config.notificationTitle || "Notifications");
+      setNotifications(config.notifications || []);
     } catch (e: any) {
       console.error(e);
       setDbError(e.message || "Failed to fetch admin data from Firebase.");
@@ -255,19 +282,24 @@ export default function Admin({ onReturn }: AdminProps) {
 
   const handlePdfSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pdfTitle || !pdfLink) {
-      alert("Provide a PDF title and a document link.");
+    if (!pdfTitle || (!pdfLink && !pdfPhysicalFile)) {
+      alert("Provide a PDF title and either a document link or file.");
       return;
     }
 
     setSubmittingFile(true);
     try {
-      await adminUploadPDF(pdfTitle, pdfClass, pdfStream, pdfSubject, pdfLink);
+      if (pdfPhysicalFile) {
+        await adminUploadPDFFile(pdfTitle, pdfClass, pdfStream, pdfSubject, pdfPhysicalFile);
+      } else {
+        await adminUploadPDF(pdfTitle, pdfClass, pdfStream, pdfSubject, pdfLink);
+      }
 
       setPdfTitle("");
       setPdfLink("");
+      setPdfPhysicalFile(null);
 
-      triggerToast("Study material link uploaded and indexed successfully!");
+      triggerToast("Study material uploaded and indexed successfully!");
       refreshAdminData();
     } catch (err: any) {
       alert(err.message || "PDF link transaction failed. Please try again.");
@@ -776,6 +808,9 @@ export default function Admin({ onReturn }: AdminProps) {
               label: "Syllabus subscriptions",
               icon: CreditCard,
             },
+            { id: "pages_config", label: "Global Settings", icon: FileText },
+            { id: "subject_logos", label: "Subject Logos", icon: Image },
+            { id: "notification_config", label: "Notifications", icon: Bell },
           ].map((item) => {
             const Icon = item.icon;
             return (
@@ -1185,16 +1220,24 @@ service cloud.firestore {
                   {/* Device PDF Selector */}
                   <div>
                     <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
-                      PDF Document Link
+                      PDF Document Link OR File Upload
                     </label>
-                    <input
-                      id="pdf-file-selector"
-                      type="url"
-                      placeholder="https://example.com/study-material.pdf"
-                      value={pdfLink}
-                      onChange={(e) => setPdfLink(e.target.value)}
-                      className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-600 outline-none focus:border-indigo-500/50"
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        id="pdf-file-selector"
+                        type="url"
+                        placeholder="https://...link.pdf"
+                        value={pdfLink}
+                        onChange={(e) => setPdfLink(e.target.value)}
+                        className="w-1/2 h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-600 outline-none focus:border-indigo-500/50"
+                      />
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        onChange={(e) => setPdfPhysicalFile(e.target.files ? e.target.files[0] : null)}
+                        className="w-1/2 h-10 p-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -1519,6 +1562,226 @@ service cloud.firestore {
                     })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB 6: PAGES CONFIG */}
+          {activeTab === "pages_config" && (
+            <div className="space-y-6">
+              <div className="border-b border-black/5 dark:border-white/5 pb-3">
+                <h2 className="font-sans font-bold text-base text-indigo-300">
+                  Global App Configuration
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Manage static pages and content settings
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-2">Global App Logo URL</label>
+                  <input
+                    type="url"
+                    value={appLogoUrl}
+                    onChange={(e) => setAppLogoUrl(e.target.value)}
+                    className="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-600 outline-none focus:border-indigo-500/50"
+                    placeholder="https://...logo.png"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">This will display in the top left corner instead of the default book icon.</p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-2">About Learning With NRK (Text)</label>
+                  <textarea
+                    value={aboutText}
+                    onChange={(e) => setAboutText(e.target.value)}
+                    className="w-full h-32 p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-600 outline-none focus:border-indigo-500/50"
+                    placeholder="Enter About Us content here..."
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-2">Help and Support Contact (Text)</label>
+                  <textarea
+                    value={helpText}
+                    onChange={(e) => setHelpText(e.target.value)}
+                    className="w-full h-32 p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-600 outline-none focus:border-indigo-500/50"
+                    placeholder="Enter Help & Support details here..."
+                  />
+                </div>
+                
+                <button
+                  onClick={async () => {
+                    try {
+                      await updateAppConfig({ aboutText, helpText, subjectIcons, appLogoUrl });
+                      triggerToast("Pages Configuration Updated!");
+                    } catch (e) {
+                      console.error(e);
+                      alert("Failed to save config.");
+                    }
+                  }}
+                  className="w-full h-11 rounded-xl bg-indigo-600 text-white font-sans font-bold text-xs hover:bg-indigo-500 transition-colors shadow-lg cursor-pointer flex items-center justify-center"
+                >
+                  Save Pages Configuration
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 7: SUBJECT LOGOS CONFIG */}
+          {activeTab === "subject_logos" && (
+            <div className="space-y-6">
+              <div className="border-b border-black/5 dark:border-white/5 pb-3">
+                <h2 className="font-sans font-bold text-base text-indigo-300">
+                  Subject Logos Configuration
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Set custom icon URLs for each subject (e.g. from an image hosting site).
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {["Physics", "Chemistry", "Mathematics", "English", "Malayalam", "Hindi", "Computer Science", "Biology"].map((sub) => (
+                      <div key={sub} className="flex flex-col gap-2 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl">
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{sub}</span>
+                        <div className="flex items-center gap-3">
+                          {subjectIcons[sub] ? (
+                            <img src={subjectIcons[sub]} alt={sub} className="w-10 h-10 object-contain rounded-lg bg-black/5 dark:bg-white/5 p-1" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-black/5 dark:bg-white/5 border border-dashed border-black/20 dark:border-white/20 flex flex-col items-center justify-center text-slate-400">
+                              <Image className="w-4 h-4" />
+                            </div>
+                          )}
+                          <div className="flex-1 flex flex-col gap-2">
+                            <input
+                              type="url"
+                              placeholder="https://...icon.png"
+                              value={subjectIcons[sub] || ""}
+                              onChange={(e) => setSubjectIcons({ ...subjectIcons, [sub]: e.target.value })}
+                              className="w-full h-9 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-600 outline-none focus:border-indigo-500/50"
+                            />
+                            <button 
+                              onClick={async () => {
+                                const newIcons = { ...subjectIcons };
+                                delete newIcons[sub];
+                                setSubjectIcons(newIcons);
+                              }}
+                              className="text-left text-[10px] text-rose-500 hover:text-rose-600 font-semibold w-fit"
+                            >
+                              Clear Icon
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      await updateAppConfig({ aboutText, helpText, subjectIcons, appLogoUrl });
+                      triggerToast("Subject Logos Updated!");
+                    } catch (e) {
+                      console.error(e);
+                      alert("Failed to save config.");
+                    }
+                  }}
+                  className="w-full h-11 rounded-xl bg-indigo-600 text-white font-sans font-bold text-xs hover:bg-indigo-500 transition-colors shadow-lg cursor-pointer flex items-center justify-center"
+                >
+                  Save Subject Logos
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 8: NOTIFICATIONS CONFIG */}
+          {activeTab === "notification_config" && (
+            <div className="space-y-6">
+              <div className="border-b border-black/5 dark:border-white/5 pb-3">
+                <h2 className="font-sans font-bold text-base text-indigo-300">
+                  Notification Settings
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Manage the notifications box title and add new notifications for all students.
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-2">Notification Box Title</label>
+                  <input
+                    type="text"
+                    value={notificationTitle}
+                    onChange={(e) => setNotificationTitle(e.target.value)}
+                    className="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-600 outline-none focus:border-indigo-500/50"
+                    placeholder="E.g. Notifications or New Updates"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-0">Push New Notification</label>
+                    <button 
+                      onClick={() => {
+                        const newNotifs = [...notifications, { id: "notif_" + Date.now(), content: "", date: new Date().toISOString() }];
+                        setNotifications(newNotifs);
+                      }}
+                      className="text-xs font-bold text-indigo-500 hover:text-indigo-400 flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" /> Add Message
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {notifications.map((notif, index) => (
+                      <div key={notif.id} className="relative p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl flex gap-3">
+                        <textarea
+                          value={notif.content}
+                          onChange={(e) => {
+                            const newNotifs = [...notifications];
+                            newNotifs[index].content = e.target.value;
+                            setNotifications(newNotifs);
+                          }}
+                          className="flex-1 min-h-[60px] p-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/5 text-xs text-slate-900 dark:text-white placeholder-slate-600 outline-none focus:border-indigo-500/50"
+                          placeholder="Type notification message..."
+                        />
+                        <button
+                          onClick={() => {
+                            const newNotifs = [...notifications];
+                            newNotifs.splice(index, 1);
+                            setNotifications(newNotifs);
+                          }}
+                          className="self-start p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {notifications.length === 0 && (
+                      <div className="text-xs text-slate-500 py-4 text-center border border-dashed border-slate-300 dark:border-white/10 rounded-xl">
+                        No active notifications. Click "Add Message" to create one.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  onClick={async () => {
+                    try {
+                      await updateAppConfig({ aboutText, helpText, subjectIcons, appLogoUrl, notificationTitle, notifications });
+                      triggerToast("Notifications Saved!");
+                    } catch (e) {
+                      console.error(e);
+                      alert("Failed to save config.");
+                    }
+                  }}
+                  className="w-full h-11 rounded-xl bg-indigo-600 text-white font-sans font-bold text-xs hover:bg-indigo-500 transition-colors shadow-lg cursor-pointer flex items-center justify-center"
+                >
+                  Save Notification Settings
+                </button>
+              </div>
             </div>
           )}
         </div>

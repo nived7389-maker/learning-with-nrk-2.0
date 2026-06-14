@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Bot, User, Palette, Sparkles, X, ChevronRight, Lock } from "lucide-react";
+import { User, Sparkles, X, ChevronRight, Lock } from "lucide-react";
+import { BotLogo } from "./BotLogo";
 
 interface OnboardingProps {
   onComplete: () => void;
@@ -50,9 +51,9 @@ export default function Onboarding({ onComplete, onCancel }: OnboardingProps) {
                 <motion.div
                   animate={{ y: [0, -10, 0] }}
                   transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-                  className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-3xl flex items-center justify-center shadow-lg transform rotate-3"
+                  className="w-24 h-24 bg-slate-900 border border-white/10 rounded-3xl flex items-center justify-center shadow-lg transform rotate-3"
                 >
-                  <Bot className="w-12 h-12 text-white" />
+                  <BotLogo className="w-16 h-16" />
                 </motion.div>
                 <motion.div
                   animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
@@ -92,16 +93,6 @@ export default function Onboarding({ onComplete, onCancel }: OnboardingProps) {
                   <div>
                     <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200">Customize Profile</h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Update your profile names anytime from settings.</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-2xl bg-indigo-100 dark:bg-indigo-500/20 flex-shrink-0 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                    <Palette className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200">App Themes</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Switch between beautiful dark mode and light mode.</p>
                   </div>
                 </div>
 

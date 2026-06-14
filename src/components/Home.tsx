@@ -7,7 +7,7 @@ import {
   Cpu, Dna, BookA, Languages, PenTool, Pi, Phone
 } from "lucide-react";
 import { Student, PdfAsset, BannerAsset, Subscription } from "../types";
-import { fetchBanners, fetchPDFs, listenToUserSubscription } from "../firebase";
+import { fetchBanners, fetchPDFs, listenToUserSubscription, listenAppConfig } from "../firebase";
 import { BotLogo } from "./BotLogo";
 
 interface HomeProps {
@@ -32,6 +32,7 @@ const SUBJECT_STYLING: Record<string, { icon: any; color: string; bg: string }> 
 
 export default function Home({ student, selectedSubject, onSubjectSelect, onBackToHome, onOpenAI }: HomeProps) {
   const [banners, setBanners] = useState<BannerAsset[]>([]);
+  const [appConfig, setAppConfig] = useState<any>({});
   const [activeBannerIdx, setActiveBannerIdx] = useState(0);
   const [pdfs, setPdfs] = useState<PdfAsset[]>([]);
   const [subState, setSubState] = useState<Subscription | null>(null);
@@ -45,17 +46,24 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
 
   // Load subscriptions & banners
   useEffect(() => {
-    async function loadBanners() {
+    async function loadData() {
       const bannerList = await fetchBanners();
       setBanners(bannerList);
     }
-    loadBanners();
+    loadData();
+    
+    const unsubConfig = listenAppConfig((config) => {
+      setAppConfig(config);
+    });
     
     const unsubscribe = listenToUserSubscription(student.uid, (sub) => {
       setSubState(sub);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      unsubConfig();
+    };
   }, [student]);
 
   const TriggerAIOpen = async () => {
@@ -101,12 +109,27 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
   };
 
   // Handle PDF download
-  const handleDownloadPdf = (pdf: PdfAsset) => {
+  const handleDownloadPdf = async (pdf: PdfAsset) => {
     if (student.status === "pending" || !subState || subState.status !== "active") {
       setShowSubUpgradeModal(true);
       return;
     }
-    window.open(pdf.pdfUrl, "_blank");
+    
+    try {
+      const response = await fetch(pdf.pdfUrl);
+      const blob = await response.blob();
+      const blobURL = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobURL;
+      link.download = pdf.fileName || `${pdf.title}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobURL);
+    } catch (e) {
+      console.error("Download failed, opening in new tab instead", e);
+      window.open(pdf.pdfUrl, "_blank");
+    }
   };
 
   // Filtered PDFs list
@@ -217,14 +240,14 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
 
       {!selectedSubject ? (
         // DASHBOARD HOME PREVIEW
-        <motion.div
-          id="student-dashboard"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-6 pt-4"
-        >
+        <div id="student-dashboard" className="space-y-6 pt-4 relative">
           {/* Header area */}
-          <div className="flex justify-between items-center bg-black/5 dark:bg-white/5 p-4 rounded-3xl border border-slate-200 dark:border-white/5 shadow">
+          <motion.div 
+            initial={{ opacity: 0, y: 15, filter: "blur(8px)" }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            transition={{ duration: 0.5, ease: "easeOut", delay: 0 }}
+            className="flex justify-between items-center bg-black/5 dark:bg-white/5 p-4 rounded-3xl border border-slate-200 dark:border-white/5 shadow"
+          >
             <div>
               <span className="font-sans text-xs text-indigo-400/80 font-semibold block mb-0.5">Welcome Back</span>
               <h2 id="student-greeting" className="font-sans font-extrabold text-xl text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5">
@@ -243,10 +266,16 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
                 {subState?.status === "active" ? "● Active Subscriber" : "● Sub Pending"}
               </span>
             </div>
-          </div>
+          </motion.div>
 
           {/* Dynamic Slider Banner Managed by Admin */}
-          <div id="dynamic-banners-slider" className="relative w-full rounded-2xl aspect-[2.1/1] overflow-hidden bg-slate-850 shadow-lg border border-slate-200 dark:border-white/5">
+          <motion.div 
+            initial={{ opacity: 0, y: 15, filter: "blur(8px)" }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
+            id="dynamic-banners-slider" 
+            className="relative w-full rounded-2xl aspect-[2.1/1] overflow-hidden bg-slate-850 shadow-lg border border-slate-200 dark:border-white/5"
+          >
             {banners.length > 0 ? (
               <div className="absolute inset-0">
                 <img 
@@ -278,10 +307,14 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
                 ))}
               </div>
             )}
-          </div>
+          </motion.div>
 
           {/* Subjects selection section */}
-          <div>
+          <motion.div
+            initial={{ opacity: 0, y: 15, filter: "blur(8px)" }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            transition={{ duration: 0.5, ease: "easeOut", delay: 0.2 }}
+          >
             <div className="flex justify-between items-center mb-3">
               <h3 id="subjects-heading" className="font-sans font-bold text-sm uppercase text-slate-500 dark:text-slate-400 tracking-wider">
                 Subjects 📚
@@ -293,16 +326,20 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
             </div>
 
             {/* Subject responsive display grid */}
-            <div id="subjects-grid" className="grid grid-cols-2 gap-4">
+            <div id="subjects-grid" className="grid grid-cols-2 gap-10 py-6">
               {subjects.map((sub) => {
                 const config = SUBJECT_STYLING[sub] || { icon: GraduationCap, color: "text-indigo-400", bg: "from-indigo-500/10 to-indigo-500/20" };
                 const Icon = config.icon;
+                const customIconUrl = appConfig?.subjectIcons?.[sub];
 
                 return (
-                  <motion.button
+                    <motion.button
                     key={sub}
                     id={`subject-card-${sub.toLowerCase().replace(" ", "-")}`}
-                    whileHover={{ scale: 1.03, y: -2 }}
+                    initial={{ opacity: 0, scale: 0.8, filter: "blur(10px)" }}
+                    animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+                    transition={{ duration: 0.5, delay: 0.3 + (subjects.indexOf(sub) * 0.05) }}
+                    whileHover={{ scale: 1.1, y: -2 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => {
                       if (student.status === "pending" || !subState || subState.status !== "active") {
@@ -311,28 +348,28 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
                         onSubjectSelect(sub);
                       }
                     }}
-                    className={`relative overflow-hidden flex flex-col items-center justify-center text-center p-6 rounded-3xl bg-gradient-to-b ${config.bg} border border-slate-200 dark:border-slate-200 dark:border-white/5 shadow-sm hover:shadow-xl dark:hover:shadow-black/50 transition-all outline-none cursor-pointer group`}
+                    className="relative flex items-center justify-center outline-none cursor-pointer group"
                   >
-                    <div className={`absolute -inset-2 opacity-0 group-hover:opacity-100 bg-gradient-to-tr ${config.bg} blur-xl transition-opacity duration-500`} />
-                    <div className="relative w-14 h-14 rounded-2xl bg-white dark:bg-white/10 shadow-sm border border-slate-100 dark:border-slate-200 dark:border-white/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-500">
-                      <Icon className={`w-7 h-7 ${config.color} drop-shadow-md`} strokeWidth={2} />
+                    <div className="relative flex flex-col items-center justify-center transition-transform duration-500 overflow-hidden">
+                      {customIconUrl ? (
+                         <img referrerPolicy="no-referrer" src={customIconUrl} alt={sub} className="w-32 h-32 object-contain drop-shadow-md group-hover:drop-shadow-xl transition-all" />
+                      ) : (
+                         <Icon className={`w-32 h-32 ${config.color} drop-shadow-md group-hover:drop-shadow-xl transition-all`} strokeWidth={1.5} />
+                      )}
                     </div>
-                    <span className="relative font-sans font-extrabold text-[13px] text-slate-800 dark:text-white group-hover:text-slate-900 shadow-slate-900/5 dark:shadow-none transition-colors mb-1">
-                      {sub}
-                    </span>
-                    <span className="relative font-mono text-[9px] uppercase tracking-wider text-slate-500 dark:text-slate-400">View notes</span>
                   </motion.button>
                 );
               })}
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        </div>
       ) : (
         // SUBJECT PDFs FOLDER INNER INDEX
         <motion.div
           id="subject-inner-vault"
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={{ opacity: 0, scale: 0.98, filter: "blur(10px)" }}
+          animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
           className="space-y-5 pt-3 text-[#f2f2f2]"
         >
           {/* Internal Portal Directory Hero Header */}

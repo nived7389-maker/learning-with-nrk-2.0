@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   User, CreditCard, Award, Sliders, PhoneCall, 
-  LogOut, Pencil, ChevronRight, X, Sparkles, CheckCircle, Moon, Sun, Upload
+  LogOut, Pencil, ChevronRight, X, Sparkles, CheckCircle, Moon, Sun, Upload,
+  Info, HelpCircle, Trash2
 } from "lucide-react";
 import { Student, Subscription } from "../types";
-import { fetchUserSubscription, updateStudentProfile } from "../firebase";
-import { useTheme } from "../ThemeContext";
+import { fetchUserSubscription, updateStudentProfile, fetchAppConfig } from "../firebase";
+import Markdown from "react-markdown";
 
 interface SettingsProps {
   student: Student;
@@ -19,8 +20,8 @@ export default function Settings({ student, onLogout, onProfileUpdate }: Setting
   const [newName, setNewName] = useState(student.name);
   const [newProfileImage, setNewProfileImage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [appConfig, setAppConfig] = useState<any>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { theme, toggleTheme } = useTheme();
 
   // Subscriptions details
   const [subState, setSubState] = useState<Subscription | null>(null);
@@ -29,11 +30,13 @@ export default function Settings({ student, onLogout, onProfileUpdate }: Setting
   const [activeTabModal, setActiveTabModal] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadSubs() {
+    async function loadData() {
       const result = await fetchUserSubscription(student.uid);
       setSubState(result);
+      const config = await fetchAppConfig();
+      setAppConfig(config);
     }
-    loadSubs();
+    loadData();
   }, [student]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,16 +118,17 @@ export default function Settings({ student, onLogout, onProfileUpdate }: Setting
               initial={{ scale: 0.9, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 15 }}
-              className="bg-white dark:bg-slate-900 border border-indigo-500/20 rounded-3xl p-6 max-w-sm w-full shadow-2xl relative"
+              className="bg-white dark:bg-slate-900 border border-indigo-500/20 rounded-3xl p-6 max-w-sm w-full shadow-2xl relative max-h-[85vh] flex flex-col"
             >
               <button
                 onClick={() => setActiveTabModal(null)}
-                className="absolute top-4 right-4 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-white cursor-pointer"
+                className="absolute top-4 right-4 z-10 p-1 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md rounded-full text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
 
-              {activeTabModal === "My Account" && (
+              <div className="overflow-y-auto pr-2 pb-4 -mr-2 relative" style={{ overflowX: 'hidden' }}>
+                {activeTabModal === "My Account" && (
                 <div className="text-left space-y-4">
                   <h3 className="font-sans font-bold text-lg border-b border-black/5 dark:border-white/5 pb-2 text-indigo-400 flex items-center gap-1.5">
                     <User className="w-5 h-5" />
@@ -184,18 +188,6 @@ export default function Settings({ student, onLogout, onProfileUpdate }: Setting
                     <span>User Preferences</span>
                   </h3>
                   <div className="space-y-3 font-sans text-xs">
-                    <div className="flex justify-between items-center bg-black/5 dark:bg-white/5 p-3 rounded-xl border border-black/5 dark:border-white/5">
-                      <div className="flex items-center gap-2 text-slate-900 dark:text-slate-200">
-                        {theme === 'dark' ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-amber-500" />}
-                        <span>App Theme</span>
-                      </div>
-                      <button
-                        onClick={toggleTheme}
-                        className="px-3 py-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 font-semibold text-[10px] hover:bg-indigo-500/30 transition-colors uppercase tracking-wider"
-                      >
-                        {theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'}
-                      </button>
-                    </div>
                     <div className="flex justify-between items-center">
                       <span>Instant upload alerts</span>
                       <span className="text-green-400 font-semibold font-mono">ON</span>
@@ -211,6 +203,59 @@ export default function Settings({ student, onLogout, onProfileUpdate }: Setting
                   </div>
                 </div>
               )}
+
+              {activeTabModal === "About Us" && (
+                <div className="text-left space-y-4">
+                  <h3 className="font-sans font-bold text-lg text-indigo-400 border-b border-black/5 dark:border-white/5 pb-2 flex items-center gap-1.5">
+                    <Info className="w-5 h-5 text-indigo-400" />
+                    <span>About learning with NRK</span>
+                  </h3>
+                  <div className="text-xs text-slate-700 dark:text-slate-300 font-sans whitespace-pre-wrap">
+                    {appConfig?.aboutText || "Learning with NRK is an online education platform tailored for higher-secondary students. Our mission is to provide free digital accessibility to all textbooks and syllabus documents."}
+                  </div>
+                </div>
+              )}
+
+              {activeTabModal === "Help" && (
+                <div className="text-left space-y-4">
+                  <h3 className="font-sans font-bold text-lg text-cyan-400 border-b border-black/5 dark:border-white/5 pb-2 flex items-center gap-1.5">
+                    <HelpCircle className="w-5 h-5 text-cyan-400" />
+                    <span>Help and Support</span>
+                  </h3>
+                  <div className="text-xs text-slate-700 dark:text-slate-300 font-sans whitespace-pre-wrap">
+                    {appConfig?.helpText || "For any kind of technical doubts or support with subjects, please contact:\n\nEmail: contact@learningwithnrk.com\nPhone: +91 8848198680\nOr create a ticket through the dashboard."}
+                  </div>
+                </div>
+              )}
+
+              {activeTabModal === "Delete Account" && (
+                <div className="text-center space-y-4">
+                  <div className="mx-auto w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                    <Trash2 className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <h3 className="font-sans font-bold text-lg text-rose-500">Delete Account Permanently</h3>
+                  <p className="font-sans text-[11px] text-gray-500 leading-normal">
+                    Are you sure you want to delete your account? This action is irreversible. All your chat history, enrolled streams, and personal data will be erased forever.
+                  </p>
+                  
+                  <button
+                    onClick={() => {
+                      alert("Due to security reasons, account deletion request has been submitted to the admin for review.");
+                      setActiveTabModal(null);
+                    }}
+                    className="w-full h-11 rounded-xl bg-rose-600 text-white font-sans font-bold text-xs hover:bg-rose-500 transition-colors shadow-lg cursor-pointer"
+                  >
+                    Confirm Deletion
+                  </button>
+                  <button
+                    onClick={() => setActiveTabModal(null)}
+                    className="w-full text-xs font-semibold text-slate-400 hover:text-slate-200 mt-2"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              </div>
             </motion.div>
           </motion.div>
         )}
@@ -387,6 +432,48 @@ export default function Settings({ student, onLogout, onProfileUpdate }: Setting
                 <Sliders className="w-4 h-4" />
               </div>
               <span className="font-sans font-semibold text-xs text-slate-900 dark:text-slate-200">Preferences</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-500" />
+          </button>
+
+          {/* Item 5: About Us */}
+          <button
+            onClick={() => setActiveTabModal("About Us")}
+            className="flex items-center justify-between w-full py-4 px-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors outline-none cursor-pointer"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                <Info className="w-4 h-4" />
+              </div>
+              <span className="font-sans font-semibold text-xs text-slate-900 dark:text-slate-200">About learning with NRK</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-500" />
+          </button>
+
+          {/* Item 6: Help and Support */}
+          <button
+            onClick={() => setActiveTabModal("Help")}
+            className="flex items-center justify-between w-full py-4 px-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors outline-none cursor-pointer"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+                <HelpCircle className="w-4 h-4" />
+              </div>
+              <span className="font-sans font-semibold text-xs text-slate-900 dark:text-slate-200">Help and Support</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-500" />
+          </button>
+
+          {/* Delete Account */}
+          <button
+            onClick={() => setActiveTabModal("Delete Account")}
+            className="flex items-center justify-between w-full py-4 px-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors outline-none cursor-pointer"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                <Trash2 className="w-4 h-4" />
+              </div>
+              <span className="font-sans font-semibold text-xs text-rose-500/90 dark:text-rose-400">Delete Account Permanent</span>
             </div>
             <ChevronRight className="w-4 h-4 text-slate-500" />
           </button>

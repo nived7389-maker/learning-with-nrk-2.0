@@ -1,7 +1,7 @@
-import React, { useState, FormEvent } from "react";
+import React, { useState, FormEvent, useEffect } from "react";
 import { motion } from "motion/react";
 import { KeyRound, BookOpen, AlertCircle, Lock, Phone, User, Sun, Moon } from "lucide-react";
-import { loginWithEmail, signUpWithEmail } from "../firebase";
+import { loginWithEmail, signUpWithEmail, listenAppConfig } from "../firebase";
 import { Student } from "../types";
 import { useTheme } from "../ThemeContext";
 
@@ -17,7 +17,12 @@ export default function Login({ onSuccess, onAdminOpen }: LoginProps) {
   const [phone, setPhone] = useState("+91");
   const [name, setName] = useState("");
   const [isSignUp, setIsSignUp] = useState(true);
-  const { theme, toggleTheme } = useTheme();
+  const [appConfig, setAppConfig] = useState<any>({});
+
+  useEffect(() => {
+    const unsub = listenAppConfig((config) => setAppConfig(config));
+    return () => unsub();
+  }, []);
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let val = e.target.value;
@@ -73,19 +78,15 @@ export default function Login({ onSuccess, onAdminOpen }: LoginProps) {
       {/* Top action bar */}
       <div className="flex justify-between items-center w-full max-w-md mx-auto">
         <div className="flex items-center gap-2">
-          <BookOpen className="w-6 h-6 text-indigo-500" />
+          {appConfig?.appLogoUrl ? (
+            <img src={appConfig.appLogoUrl} alt="App Logo" className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
+          ) : (
+            <BookOpen className="w-6 h-6 text-indigo-500" />
+          )}
           <span className="font-sans font-extrabold tracking-tight text-slate-900 dark:text-white">NRK Learning</span>
         </div>
         
         <div className="flex justify-end gap-2">
-          {/* Theme Toggle */}
-          <button
-            onClick={toggleTheme}
-            className="flex items-center justify-center w-9 h-9 rounded-full bg-white dark:bg-white/5 border border-slate-200 dark:border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:text-indigo-600 hover:bg-slate-50 transition-colors shadow-sm"
-          >
-            {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-          </button>
-
           {/* Admin Button top right */}
           <button
             id="admin-entry-btn"

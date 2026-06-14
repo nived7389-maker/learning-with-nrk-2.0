@@ -72,7 +72,7 @@ export const handler: Handler = async (event, context) => {
       content: currentContent
     });
 
-    const requestModel = base64Image ? "google/gemini-2.5-flash" : "deepseek/deepseek-chat";
+    const requestModel = base64Image ? "google/gemini-1.5-flash" : "deepseek/deepseek-chat";
 
     const openRouterResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",

@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Home as HomeIcon, Settings as SettingsIcon, BookOpen, RefreshCw, Sun, Moon, Video } from "lucide-react";
+import { Home as HomeIcon, Settings as SettingsIcon, BookOpen, RefreshCw, Sun, Moon, Video, UserCircle, Bell, X } from "lucide-react";
 import { Student } from "./types";
-import { auth, logoutUser, fetchStudentProfile, listenStudentProfile, getOrCreateDeviceId } from "./firebase";
+import { auth, logoutUser, fetchStudentProfile, listenStudentProfile, getOrCreateDeviceId, listenAppConfig } from "./firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { useTheme } from "./ThemeContext";
 
@@ -24,7 +24,16 @@ export default function App() {
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const { theme, toggleTheme } = useTheme();
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [appConfig, setAppConfig] = useState<any>({});
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  useEffect(() => {
+    const unsubConfig = listenAppConfig((config) => {
+      setAppConfig(config);
+    });
+    return () => unsubConfig();
+  }, []);
 
   useEffect(() => {
     // Attempt fast local resume to avoid flicker
@@ -203,7 +212,11 @@ export default function App() {
                 {/* Top branding bar */}
                 <header className="px-6 py-4 border-b border-black/5 dark:border-white/5 bg-slate-50 dark:bg-slate-950 sticky top-0 z-30 flex items-center justify-between shadow-sm dark:shadow-none">
                   <div className="flex items-center gap-2">
-                    <BookOpen className="w-6 h-6 text-indigo-500" />
+                    {appConfig?.appLogoUrl ? (
+                      <img src={appConfig.appLogoUrl} alt="App Logo" className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
+                    ) : (
+                      <BookOpen className="w-6 h-6 text-indigo-500" />
+                    )}
                     <h1 className="font-sans font-black text-[15px] tracking-tight text-slate-900 dark:text-white uppercase">Learning With NRK</h1>
                   </div>
                   
@@ -214,25 +227,40 @@ export default function App() {
                       </div>
                     )}
                     <button
-                      onClick={toggleTheme}
-                      className="flex items-center justify-center w-8 h-8 rounded-full bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-300 shadow-sm border border-slate-200 dark:border-slate-200 dark:border-white/10 hover:text-indigo-600 transition-colors"
-                      title="Toggle Theme"
-                    >
-                      {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-                    </button>
-                    <button
                       onClick={async () => {
-                        if (currentUser) {
-                          const updatedProfile = await import("./firebase").then(m => m.fetchStudentProfile(currentUser.uid));
-                          if (updatedProfile) {
-                            handleProfilUpdated(updatedProfile);
+                        if (currentUser && !isRefreshing) {
+                          setIsRefreshing(true);
+                          try {
+                            const updatedProfile = await import("./firebase").then(m => m.fetchStudentProfile(currentUser.uid));
+                            if (updatedProfile) {
+                              handleProfilUpdated(updatedProfile);
+                            }
+                          } finally {
+                            // Give it a minimum spin time so it feels responsive
+                            setTimeout(() => setIsRefreshing(false), 600);
                           }
                         }
                       }}
                       className="w-8 h-8 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-300 shadow-sm border border-slate-200 dark:border-slate-200 dark:border-white/10 hover:text-indigo-600 transition-colors"
                       title="Refresh User Data"
+                      disabled={isRefreshing}
                     >
-                      <RefreshCw className="w-4 h-4" />
+                      <motion.div
+                        animate={{ rotate: isRefreshing ? 360 : 0 }}
+                        transition={{ duration: 1, repeat: isRefreshing ? Infinity : 0, ease: "linear" }}
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                      </motion.div>
+                    </button>
+                    <button
+                      onClick={() => setShowNotifications(true)}
+                      className="relative w-8 h-8 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-300 shadow-sm border border-slate-200 dark:border-white/10 hover:text-indigo-600 transition-colors"
+                      title="Notifications"
+                    >
+                      <Bell className="w-4 h-4" />
+                      {appConfig?.notifications?.length > 0 && (
+                        <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 border-2 border-slate-50 dark:border-slate-950 rounded-full"></span>
+                      )}
                     </button>
                   </div>
                 </header>
@@ -334,7 +362,7 @@ export default function App() {
                     </span>
                   </button>
 
-                  {/* Settings Tab controller */}
+                  {/* Profile Tab controller */}
                   <button
                     id="bottom-tab-settings-btn"
                     onClick={() => {
@@ -348,16 +376,71 @@ export default function App() {
                         ? "bg-gradient-to-tr from-pink-500 via-rose-500 to-red-500 shadow-lg shadow-rose-500/20 text-white scale-110"
                         : "text-slate-500 dark:text-slate-400 hover:text-gray-600 dark:hover:text-gray-300"
                     }`}>
-                      <SettingsIcon className="w-5 h-5" />
+                      <UserCircle className="w-5 h-5" />
                     </div>
                     <span className={`text-[10px] font-sans font-bold ${
                       currentTab === "settings" ? "text-rose-600 dark:text-rose-400 scale-102" : "text-slate-500 dark:text-slate-400"
                     }`}>
-                      Settings
+                      Profile
                     </span>
                   </button>
 
                 </nav>
+
+                {/* Notifications Modal */}
+                <AnimatePresence>
+                  {showNotifications && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+                      onClick={() => setShowNotifications(false)}
+                    >
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl relative max-h-[80vh] flex flex-col"
+                      >
+                        <button
+                          onClick={() => setShowNotifications(false)}
+                          className="absolute top-4 right-4 z-10 p-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                        
+                        <div className="flex items-center gap-3 border-b border-slate-100 dark:border-white/5 pb-4 mb-4">
+                          <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                            <Bell className="w-5 h-5" />
+                          </div>
+                          <h2 className="font-sans font-bold text-lg text-slate-900 dark:text-white">
+                            {appConfig?.notificationTitle || "Notifications"}
+                          </h2>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto space-y-3 -mr-2 pr-2">
+                          {appConfig?.notifications && appConfig.notifications.length > 0 ? (
+                            appConfig.notifications.map((notif: any, i: number) => (
+                              <div key={i} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 flex gap-3">
+                                <div className="mt-1 w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0"></div>
+                                <div>
+                                  <div className="text-sm text-slate-800 dark:text-slate-200 font-medium whitespace-pre-wrap">{notif.content}</div>
+                                  <div className="text-[10px] text-slate-400 mt-1">{new Date(notif.date).toLocaleDateString()}</div>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-center py-8 text-slate-500 dark:text-slate-400 text-sm">
+                              No new notifications
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </>
             )}
           </motion.div>

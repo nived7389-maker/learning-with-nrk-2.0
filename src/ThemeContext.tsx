@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
 
-type Theme = 'light' | 'dark';
+type Theme = 'dark';
 
 interface ThemeContextType {
   theme: Theme;
@@ -11,25 +11,21 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    const savedTheme = localStorage.getItem('nrk_theme');
-    // First time signup/visit should be light mode by default
-    return (savedTheme as Theme) || 'light';
-  });
+  const theme: Theme = 'dark';
 
   useEffect(() => {
     const root = window.document.documentElement;
-    root.classList.remove('light', 'dark');
-    root.classList.add(theme);
-    localStorage.setItem('nrk_theme', theme);
-  }, [theme]);
+    root.classList.remove('light');
+    root.classList.add('dark');
+    localStorage.setItem('nrk_theme', 'dark');
+  }, []);
 
   const toggleTheme = () => {
-    setThemeState((prev) => (prev === 'light' ? 'dark' : 'light'));
+    // Disabled, force dark mode
   };
 
   const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme);
+    // Disabled, force dark mode
   };
 
   return (
@@ -46,3 +42,4 @@ export const useTheme = () => {
   }
   return context;
 };
+

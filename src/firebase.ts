@@ -667,6 +667,40 @@ export async function adminRejectStudent(uid: string): Promise<void> {
 }
 
 // Upload study material PDF
+
+export async function adminUploadPDFFile(
+  title: string,
+  classRoom: "+1" | "+2",
+  stream: "Computer Science" | "Biology Science",
+  subject: string,
+  pdfFile: File
+): Promise<void> {
+  const newId = "pdf_" + Date.now();
+  if (useLocalMock) return;
+
+  try {
+    const storageRefPath = `pdfs/${newId}_${pdfFile.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+    const fileRef = ref(storage, storageRefPath);
+    await uploadBytes(fileRef, pdfFile);
+    const pdfUrl = await getDownloadURL(fileRef);
+
+    const pdfDocRef = doc(db, "pdfs", newId);
+    await setDoc(pdfDocRef, {
+      id: newId,
+      title,
+      class: classRoom,
+      stream,
+      subject,
+      pdfUrl: pdfUrl,
+      fileName: pdfFile.name,
+      uploadedAt: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    console.error("adminUploadPDFFile failed:", err);
+    throw err;
+  }
+}
+
 export async function adminUploadPDF(
   title: string,
   classRoom: "+1" | "+2",
@@ -902,6 +936,57 @@ export async function adminToggleSubscription(
       throw new Error("Toggle Denied: Missing Admin Privileges.");
     throw err;
   }
+}
+
+export async function updateAppConfig(config: any): Promise<void> {
+  if (useLocalMock) {
+    setLocalData("astr_app_config", config);
+    return;
+  }
+  try {
+    const docRef = doc(db, "settings", "global");
+    await setDoc(docRef, config, { merge: true });
+  } catch (err) {
+    console.warn("Could not save config", err);
+  }
+}
+
+export async function fetchAppConfig(): Promise<any> {
+  if (useLocalMock) {
+    return getLocalData("astr_app_config", {});
+  }
+  try {
+    const docRef = doc(db, "settings", "global");
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return snap.data();
+    }
+  } catch (err) {
+    console.warn("Could not fetch config", err);
+  }
+  return {};
+}
+
+export function listenAppConfig(callback: (config: any) => void): () => void {
+  if (useLocalMock) {
+    callback(getLocalData("astr_app_config", {}));
+    // Poll for mock environment updates occasionally
+    const intervalId = setInterval(() => {
+      callback(getLocalData("astr_app_config", {}));
+    }, 2000);
+    return () => clearInterval(intervalId);
+  }
+  
+  const docRef = doc(db, "settings", "global");
+  return onSnapshot(docRef, (snap) => {
+    if (snap.exists()) {
+      callback(snap.data());
+    } else {
+      callback({});
+    }
+  }, (err) => {
+    console.warn("Could not listen to config", err);
+  });
 }
 
 export async function saveAIChatHistory(uid: string, histories: any[]) {
