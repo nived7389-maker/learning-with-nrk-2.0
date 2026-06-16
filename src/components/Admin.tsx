@@ -51,7 +51,9 @@ interface AdminProps {
 
 export default function Admin({ onReturn }: AdminProps) {
   // Authorization State
-  const [authorized, setAuthorized] = useState(false);
+  const [authorized, setAuthorized] = useState(() => {
+    return localStorage.getItem("lrnk_admin_session") === "true";
+  });
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
 
@@ -141,6 +143,7 @@ export default function Admin({ onReturn }: AdminProps) {
     if (password === correctPassword) {
       setAuthorized(true);
       setAuthError("");
+      localStorage.setItem("lrnk_admin_session", "true");
     } else {
       setAuthError("Incorrect system passcode. Please try again.");
     }
@@ -780,11 +783,15 @@ export default function Admin({ onReturn }: AdminProps) {
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={() => setAuthorized(false)}
+            onClick={() => {
+              setAuthorized(false);
+              localStorage.removeItem("lrnk_admin_session");
+              if (onReturn) onReturn();
+            }}
             className="px-3 py-1.5 rounded-lg bg-pink-500/10 border border-pink-500/20 text-xxs text-pink-400 flex items-center gap-1 hover:bg-pink-500/20 cursor-pointer"
           >
             <LogOut className="w-3 h-3" />
-            <span>Lock Panel</span>
+            <span>Lock Portal</span>
           </button>
         </div>
       </div>

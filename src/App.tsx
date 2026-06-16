@@ -37,6 +37,12 @@ export default function App() {
 
   useEffect(() => {
     // Attempt fast local resume to avoid flicker
+    const isAdminActive = localStorage.getItem("lrnk_admin_session") === "true";
+    if (isAdminActive) {
+      setSessionState("admin");
+      return;
+    }
+
     const cachedProfileData = localStorage.getItem("lrnk_student_profile");
     if (cachedProfileData) {
       try {
@@ -58,6 +64,10 @@ export default function App() {
       return;
     }
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      // If we are already in admin view because of local storage, ignore automatic student sign in flows
+      if (localStorage.getItem("lrnk_admin_session") === "true") {
+        return;
+      }
       if (user) {
         try {
           const profile = await fetchStudentProfile(user.uid);
@@ -192,7 +202,10 @@ export default function App() {
         {/* Global Admin Suite Workspace */}
         {sessionState === "admin" && (
           <Admin 
-            onReturn={() => setSessionState("login")} 
+            onReturn={() => {
+              localStorage.removeItem("lrnk_admin_session");
+              setSessionState("login");
+            }} 
           />
         )}
 

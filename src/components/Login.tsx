@@ -83,7 +83,7 @@ export default function Login({ onSuccess, onAdminOpen }: LoginProps) {
           ) : (
             <BookOpen className="w-6 h-6 text-indigo-500" />
           )}
-          <span className="font-sans font-extrabold tracking-tight text-slate-900 dark:text-white">NRK Learning</span>
+          <span className="font-sans font-extrabold tracking-tight text-slate-900 dark:text-white">Learning with nrk</span>
         </div>
         
         <div className="flex justify-end gap-2">
