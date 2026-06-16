@@ -8,7 +8,8 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   setPersistence,
-  browserLocalPersistence
+  browserLocalPersistence,
+  deleteUser
 } from "firebase/auth";
 import {
   getFirestore,
@@ -239,6 +240,7 @@ export async function logoutUser() {
     await signOut(auth);
   }
 }
+
 
 // ---------------------------------
 // FIRESTORE QUERIES & LIVE SYNC WRAPPERS

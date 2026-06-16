@@ -228,33 +228,6 @@ export default function Settings({ student, onLogout, onProfileUpdate }: Setting
                 </div>
               )}
 
-              {activeTabModal === "Delete Account" && (
-                <div className="text-center space-y-4">
-                  <div className="mx-auto w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
-                    <Trash2 className="w-6 h-6 animate-pulse" />
-                  </div>
-                  <h3 className="font-sans font-bold text-lg text-rose-500">Delete Account Permanently</h3>
-                  <p className="font-sans text-[11px] text-gray-500 leading-normal">
-                    Are you sure you want to delete your account? This action is irreversible. All your chat history, enrolled streams, and personal data will be erased forever.
-                  </p>
-                  
-                  <button
-                    onClick={() => {
-                      alert("Due to security reasons, account deletion request has been submitted to the admin for review.");
-                      setActiveTabModal(null);
-                    }}
-                    className="w-full h-11 rounded-xl bg-rose-600 text-white font-sans font-bold text-xs hover:bg-rose-500 transition-colors shadow-lg cursor-pointer"
-                  >
-                    Confirm Deletion
-                  </button>
-                  <button
-                    onClick={() => setActiveTabModal(null)}
-                    className="w-full text-xs font-semibold text-slate-400 hover:text-slate-200 mt-2"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
               </div>
             </motion.div>
           </motion.div>
@@ -464,19 +437,6 @@ export default function Settings({ student, onLogout, onProfileUpdate }: Setting
             <ChevronRight className="w-4 h-4 text-slate-500" />
           </button>
 
-          {/* Delete Account */}
-          <button
-            onClick={() => setActiveTabModal("Delete Account")}
-            className="flex items-center justify-between w-full py-4 px-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors outline-none cursor-pointer"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
-                <Trash2 className="w-4 h-4" />
-              </div>
-              <span className="font-sans font-semibold text-xs text-rose-500/90 dark:text-rose-400">Delete Account Permanent</span>
-            </div>
-            <ChevronRight className="w-4 h-4 text-slate-500" />
-          </button>
         </div>
 
         {/* Customer Care Section Widget */}
