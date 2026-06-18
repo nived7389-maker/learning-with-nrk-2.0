@@ -26,6 +26,7 @@ export default function WaitingRoom({
 }: WaitingRoomProps) {
   const [checking, setChecking] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [logoClicks, setLogoClicks] = useState(0);
 
   useEffect(() => {
     const unsubscribe = listenStudentProfile(student.uid, (freshProfile) => {
@@ -78,19 +79,22 @@ export default function WaitingRoom({
     >
       {/* Top section */}
       <div className="flex justify-between items-center w-full max-w-md mx-auto">
-        <span className="font-sans font-semibold text-sm tracking-tight text-slate-900 dark:text-white/50">
+        <span 
+          className="font-sans font-semibold text-sm tracking-tight text-slate-900 dark:text-white/50 cursor-pointer"
+          onClick={() => {
+            const next = logoClicks + 1;
+            if (next >= 6) {
+              setLogoClicks(0);
+              onAdminOpen();
+            } else {
+              setLogoClicks(next);
+            }
+          }}
+        >
           HSE SCIENCE PORTAL
         </span>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={onAdminOpen}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-sans font-semibold text-xs transition-colors hover:bg-indigo-500/20 cursor-pointer outline-none"
-          >
-            <KeyRound className="w-3.5 h-3.5" />
-            <span>Admin Control</span>
-          </button>
-
           <button
             id="logout-from-waiting-btn"
             onClick={onLogout}
@@ -160,7 +164,7 @@ export default function WaitingRoom({
         {/* Enroll Subscription Button */}
         <motion.button
           onClick={() => {
-            const message = `Want a new subscription.\nName: ${student.name}\nPhone: ${student.phone || "Not provided"}`;
+            const message = `want a subscription`;
             window.open(`https://wa.me/918848198680?text=${encodeURIComponent(message)}`, "_blank");
           }}
           whileTap={{ scale: 0.96 }}

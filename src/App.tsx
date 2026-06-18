@@ -12,7 +12,7 @@ import Home from "./components/Home";
 import Settings from "./components/Settings";
 import Admin from "./components/Admin";
 import AIAssistant from "./components/AIAssistant";
-import VideoClass from "./components/VideoClass";
+import NotesView from "./components/NotesView";
 import MicroBit from "./components/MicroBit";
 import { PaperCutsIcon } from "./components/PaperCutsIcon";
 import Onboarding from "./components/Onboarding";
@@ -128,7 +128,7 @@ export default function App() {
     setSelectedSubject(null);
   };
 
-  const handleLoginSuccess = (student: Student, isExplicitLogin: boolean = false) => {
+  const handleLoginSuccess = (student: Student, isExplicitLogin: boolean = false, justSignedUp: boolean = false) => {
     localStorage.setItem("lrnk_student_profile", JSON.stringify(student));
     setCurrentUser(student);
     // User wants to always go to home page
@@ -136,7 +136,7 @@ export default function App() {
     
     if (student.status === "approved" || student.status === "pending") {
       setSessionState("portal");
-      if (isExplicitLogin) {
+      if (justSignedUp) {
         setShowOnboarding(true);
       }
     } else {
@@ -184,7 +184,7 @@ export default function App() {
         {/* Login authentication screen */}
         {sessionState === "login" && (
           <Login
-            onSuccess={(student) => handleLoginSuccess(student, true)}
+            onSuccess={(student, justSignedUp) => handleLoginSuccess(student, true, justSignedUp)}
             onAdminOpen={() => setSessionState("admin")}
           />
         )}
@@ -285,15 +285,25 @@ export default function App() {
                       student={currentUser}
                       selectedSubject={selectedSubject}
                       onSubjectSelect={(sub) => setSelectedSubject(sub)}
-                      onBackToHome={() => setSelectedSubject(null)}
+                      onBackToHome={() => {
+                        if (selectedSubject?.startsWith("Microbit -")) {
+                          setCurrentTab("microbit");
+                        }
+                        setSelectedSubject(null);
+                      }}
                       onOpenAI={() => setShowAIAssistant(true)}
                     />
                   )}
                   {currentTab === "video" && (
-                    <VideoClass />
+                    <NotesView student={currentUser} />
                   )}
                   {currentTab === "microbit" && (
-                    <MicroBit />
+                    <MicroBit 
+                      onSubjectSelect={(sub) => {
+                        setSelectedSubject(sub);
+                        setCurrentTab("home");
+                      }}
+                    />
                   )}
                   {currentTab === "settings" && (
                     <Settings
@@ -352,7 +362,7 @@ export default function App() {
                     </span>
                   </button>
 
-                  {/* Video Class Tab controller */}
+                  {/* Notes Tab controller */}
                   <button
                     id="bottom-tab-video-btn"
                     onClick={() => {
@@ -366,12 +376,12 @@ export default function App() {
                         ? "bg-gradient-to-tr from-pink-500 via-rose-500 to-red-500 shadow-lg shadow-rose-500/20 text-white scale-110"
                         : "text-slate-500 dark:text-slate-400 hover:text-gray-600 dark:hover:text-gray-300"
                     }`}>
-                      <Video className="w-5 h-5" />
+                      <BookOpen className="w-5 h-5" />
                     </div>
                     <span className={`text-[10px] font-sans font-bold ${
                       currentTab === "video" ? "text-rose-600 dark:text-rose-400 scale-102" : "text-slate-500 dark:text-slate-400"
                     }`}>
-                      Video Class
+                      Notes
                     </span>
                   </button>
 

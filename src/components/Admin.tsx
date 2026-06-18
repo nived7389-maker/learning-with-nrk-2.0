@@ -22,6 +22,7 @@ import {
   Pencil,
   RefreshCw,
   Bell,
+  Video,
 } from "lucide-react";
 import {
   getAdminDashboardStats,
@@ -41,9 +42,16 @@ import {
   adminUpdateStudentCourse,
   isUsingLocalMock,
   fetchAppConfig,
-  updateAppConfig
+  updateAppConfig,
+  adminUploadMicrobit,
+  adminUploadMicrobitFile,
+  adminDeleteMicrobit,
+  adminUploadVideo,
+  adminUpdateVideo,
+  adminDeleteVideo,
+  fetchVideos
 } from "../firebase";
-import { Student, PdfAsset, BannerAsset, SubjectName } from "../types";
+import { Student, PdfAsset, BannerAsset, SubjectName, VideoAsset } from "../types";
 
 interface AdminProps {
   onReturn: () => void;
@@ -62,9 +70,12 @@ export default function Admin({ onReturn }: AdminProps) {
     | "dashboard"
     | "activation"
     | "pdf_upload"
+    | "video_upload"
+    | "microbit_upload"
     | "banner"
     | "sub_manage"
     | "library"
+    | "video_library"
     | "app_config"
     | "subject_logos"
     | "pages_config"
@@ -90,6 +101,7 @@ export default function Admin({ onReturn }: AdminProps) {
   const [studentsList, setStudentsList] = useState<Student[]>([]);
   const [bannersList, setBannersList] = useState<BannerAsset[]>([]);
   const [pdfSyncList, setPdfSyncList] = useState<PdfAsset[]>([]);
+  const [microbitSyncList, setMicrobitSyncList] = useState<any[]>([]);
 
   const [generalLoading, setGeneralLoading] = useState(false);
   const [actionFeedback, setActionFeedback] = useState("");
@@ -118,6 +130,17 @@ export default function Admin({ onReturn }: AdminProps) {
   // Banner Upload Form State
   const [bannerLink, setBannerLink] = useState("");
 
+  // Microbit Upload Form State
+  const [mbTitle, setMbTitle] = useState("");
+  const [mbClass, setMbClass] = useState<"+1" | "+2">("+2");
+  const [mbStream, setMbStream] = useState<
+    "Computer Science" | "Biology Science"
+  >("Computer Science");
+  const [mbSubject, setMbSubject] = useState<string>("Onam Exam");
+  const [mbLink, setMbLink] = useState("");
+  const [mbPhysicalFile, setMbPhysicalFile] = useState<File | null>(null);
+  const [mbSubmittingFile, setMbSubmittingFile] = useState(false);
+
   // Library Manager View State
   const [libraryClass, setLibraryClass] = useState<"+1" | "+2">("+2");
   const [libraryStream, setLibraryStream] = useState<
@@ -125,6 +148,28 @@ export default function Admin({ onReturn }: AdminProps) {
   >("Computer Science");
   const [libraryPdfs, setLibraryPdfs] = useState<PdfAsset[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
+
+  // Video Upload Form State
+  const [videoTitle, setVideoTitle] = useState("");
+  const [videoClass, setVideoClass] = useState<"+1" | "+2">("+2");
+  const [videoStream, setVideoStream] = useState<
+    "Computer Science" | "Biology Science"
+  >("Computer Science");
+  const [videoSubject, setVideoSubject] = useState<SubjectName>("Physics");
+  const [videoChapter, setVideoChapter] = useState("");
+  const [videoPart, setVideoPart] = useState(1);
+  const [videoLink, setVideoLink] = useState("");
+  const [videoSubmitting, setVideoSubmitting] = useState(false);
+
+  // Video Library Manager State
+  const [libraryVideoClass, setLibraryVideoClass] = useState<"+1" | "+2">("+2");
+  const [libraryVideoStream, setLibraryVideoStream] = useState<
+    "Computer Science" | "Biology Science"
+  >("Computer Science");
+  const [libraryVideos, setLibraryVideos] = useState<VideoAsset[]>([]);
+  const [libraryVideoLoading, setLibraryVideoLoading] = useState(false);
+  const [editingVideo, setEditingVideo] = useState<VideoAsset | null>(null);
+  const [editVideoSubmitting, setEditVideoSubmitting] = useState(false);
 
   // Sync Library
   useEffect(() => {
@@ -136,6 +181,16 @@ export default function Admin({ onReturn }: AdminProps) {
         .finally(() => setLibraryLoading(false));
     }
   }, [activeTab, libraryClass, libraryStream]);
+
+  useEffect(() => {
+    if (activeTab === "video_library") {
+      setLibraryVideoLoading(true);
+      fetchVideos(libraryVideoClass, libraryVideoStream)
+        .then(setLibraryVideos)
+        .catch(console.error)
+        .finally(() => setLibraryVideoLoading(false));
+    }
+  }, [activeTab, libraryVideoClass, libraryVideoStream]);
 
   const correctPassword = "123nfjhhgb";
 
@@ -308,6 +363,111 @@ export default function Admin({ onReturn }: AdminProps) {
       alert(err.message || "PDF link transaction failed. Please try again.");
     } finally {
       setSubmittingFile(false);
+    }
+  };
+
+  const handleVideoSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!videoTitle || !videoLink || !videoChapter || !videoPart) {
+      alert("Provide a Video title, link, chapter, and part number.");
+      return;
+    }
+
+    setVideoSubmitting(true);
+    try {
+      await adminUploadVideo(
+        videoTitle,
+        videoClass,
+        videoStream,
+        videoSubject,
+        videoChapter,
+        videoPart,
+        videoLink
+      );
+
+      setVideoTitle("");
+      setVideoLink("");
+      setVideoChapter("");
+      setVideoPart(1);
+
+      triggerToast("Study video material uploaded successfully!");
+      refreshAdminData();
+    } catch (err: any) {
+      alert(err.message || "Video transaction failed. Please try again.");
+    } finally {
+      setVideoSubmitting(false);
+    }
+  };
+
+  const handleDeleteVideo = async (videoId: string) => {
+    if (!confirm("Do you want to delete this study video?")) return;
+    try {
+      await adminDeleteVideo(videoId);
+      triggerToast("Video deleted from index.");
+      refreshAdminData();
+      // re-fetch library videos if in that tab
+      if (activeTab === "video_library") {
+         const list = await fetchVideos(libraryVideoClass, libraryVideoStream);
+         setLibraryVideos(list);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUpdateVideoSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingVideo) return;
+    setEditVideoSubmitting(true);
+    try {
+      await adminUpdateVideo(editingVideo.id, {
+        title: editingVideo.title,
+        class: editingVideo.class,
+        stream: editingVideo.stream,
+        subject: editingVideo.subject,
+        chapter: editingVideo.chapter,
+        part: editingVideo.part,
+        videoUrl: editingVideo.videoUrl
+      });
+      triggerToast("Video updated successfully!");
+      setEditingVideo(null);
+      refreshAdminData();
+      if (activeTab === "video_library") {
+         const list = await fetchVideos(libraryVideoClass, libraryVideoStream);
+         setLibraryVideos(list);
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to update video.");
+    } finally {
+      setEditVideoSubmitting(false);
+    }
+  };
+
+  const handleMicrobitSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mbTitle || (!mbLink && !mbPhysicalFile)) {
+      alert("Provide a Microbit material title and either a document link or file.");
+      return;
+    }
+
+    setMbSubmittingFile(true);
+    try {
+      if (mbPhysicalFile) {
+        await adminUploadMicrobitFile(mbTitle, mbClass, mbStream, mbSubject, mbPhysicalFile);
+      } else {
+        await adminUploadMicrobit(mbTitle, mbClass, mbStream, mbSubject, mbLink);
+      }
+
+      setMbTitle("");
+      setMbLink("");
+      setMbPhysicalFile(null);
+
+      triggerToast("Micro:bit material uploaded successfully!");
+      refreshAdminData();
+    } catch (err: any) {
+      alert(err.message || "Micro:bit transaction failed. Please try again.");
+    } finally {
+      setMbSubmittingFile(false);
     }
   };
 
@@ -808,7 +968,10 @@ export default function Admin({ onReturn }: AdminProps) {
               icon: CheckCircle,
             },
             { id: "pdf_upload", label: "Study notes uploads", icon: FilePlus },
-            { id: "library", label: "Library Manager", icon: BookOpen },
+            { id: "library", label: "Library Notes Manager", icon: BookOpen },
+            { id: "video_upload", label: "Study Videos Uploads", icon: FilePlus },
+            { id: "video_library", label: "Library Video Manager", icon: BookOpen },
+            { id: "microbit_upload", label: "Micro:bit Uploads", icon: FilePlus },
             { id: "banner", label: "Banner ads sliders", icon: Image },
             {
               id: "sub_manage",
@@ -1204,6 +1367,10 @@ service cloud.firestore {
                       <option value="Computer Science">Computer Science</option>
                       <option value="Biology">Biology</option>
                       <option value="Hindi">Hindi</option>
+                      <option disabled>──────────</option>
+                      <option value="Microbit - Onam Exam">Microbit - Onam Exam</option>
+                      <option value="Microbit - Christmas Exam">Microbit - Christmas Exam</option>
+                      <option value="Microbit - Annual Exam">Microbit - Annual Exam</option>
                     </select>
                   </div>
                 </div>
@@ -1299,12 +1466,267 @@ service cloud.firestore {
             </div>
           )}
 
+          {/* TAB: STUDY VIDEOS UPLOAD MANAGER */}
+          {activeTab === "video_upload" && (
+            <div className="space-y-6">
+              <div className="border-b border-black/5 dark:border-white/5 pb-3">
+                <h2 className="font-sans font-bold text-base text-indigo-300">
+                  Upload Study Videos
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Select syllabus streaming group level and publish Video material
+                </p>
+              </div>
+              <form
+                onSubmit={handleVideoSubmit}
+                className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-3xl border border-black/5 dark:border-white/5 space-y-4"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Class Target */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+                      Academic Class
+                    </label>
+                    <select
+                      className="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500/50"
+                      value={videoClass}
+                      onChange={(e) => setVideoClass(e.target.value as any)}
+                    >
+                      <option value="+1">Plus One (+1)</option>
+                      <option value="+2">Plus Two (+2)</option>
+                    </select>
+                  </div>
+
+                  {/* Stream Target */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+                      Academic Stream
+                    </label>
+                    <select
+                      className="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500/50"
+                      value={videoStream}
+                      onChange={(e) => setVideoStream(e.target.value as any)}
+                    >
+                      <option value="Computer Science">Computer Science</option>
+                      <option value="Biology Science">Biology Science</option>
+                    </select>
+                  </div>
+
+                  {/* Subject Target */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+                      Subject
+                    </label>
+                    <select
+                      className="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500/50"
+                      value={videoSubject}
+                      onChange={(e) => setVideoSubject(e.target.value as any)}
+                    >
+                      <option value="Physics">Physics</option>
+                      <option value="Chemistry">Chemistry</option>
+                      <option value="Mathematics">Mathematics</option>
+                      <option value="Biology">Biology</option>
+                      <option value="English">English</option>
+                      <option value="Hindi">Hindi</option>
+                      <option value="Malayalam">Malayalam</option>
+                      <option value="Computer Science">
+                        Computer Science
+                      </option>
+                    </select>
+                  </div>
+                  {/* Chapter Target */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+                      Chapter
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Current Electricity"
+                      value={videoChapter}
+                      onChange={(e) => setVideoChapter(e.target.value)}
+                      className="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-600 outline-none focus:border-indigo-500/50"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Video part */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+                      Video Part Number
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={videoPart}
+                      onChange={(e) => setVideoPart(parseInt(e.target.value))}
+                      className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500/50"
+                    />
+                  </div>
+                  {/* Video title */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+                      Material Title
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Introduction & Law"
+                      value={videoTitle}
+                      onChange={(e) => setVideoTitle(e.target.value)}
+                      className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-600 outline-none focus:border-indigo-500/50"
+                    />
+                  </div>
+                  {/* Video Link */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+                      YouTube Embed Link
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://www.youtube.com/embed/..."
+                      value={videoLink}
+                      onChange={(e) => setVideoLink(e.target.value)}
+                      className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-600 outline-none focus:border-indigo-500/50"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={videoSubmitting}
+                  className="w-full h-11 rounded-xl bg-indigo-600 text-slate-900 dark:text-white font-sans font-bold text-xs hover:bg-indigo-500 disabled:opacity-50 transition-all cursor-pointer outline-none"
+                >
+                  {videoSubmitting
+                    ? "Publishing Video..."
+                    : "Upload Study Video"}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* TAB: MICRO:BIT UPLOAD MANAGER */}
+          {activeTab === "microbit_upload" && (
+            <div className="space-y-6">
+              <div className="border-b border-black/5 dark:border-white/5 pb-3">
+                <h2 className="font-sans font-bold text-base text-indigo-300">
+                  Micro:bit Uploads
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Upload micro:bit materials, exam cuttings, and short notes.
+                </p>
+              </div>
+
+              <form
+                onSubmit={handleMicrobitSubmit}
+                className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-3xl border border-black/5 dark:border-white/5 space-y-4"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Class Target */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+                      Academic Class
+                    </label>
+                    <select
+                      className="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500/50"
+                      value={mbClass}
+                      onChange={(e) => setMbClass(e.target.value as any)}
+                    >
+                      <option value="+1">Plus One (+1)</option>
+                      <option value="+2">Plus Two (+2)</option>
+                    </select>
+                  </div>
+
+                  {/* Stream Target */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+                      Academic Stream
+                    </label>
+                    <select
+                      className="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500/50"
+                      value={mbStream}
+                      onChange={(e) => setMbStream(e.target.value as any)}
+                    >
+                      <option value="Computer Science">Computer Science</option>
+                      <option value="Biology Science">Biology Science</option>
+                    </select>
+                  </div>
+
+                  {/* Subject Target */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+                      Exam Type Target
+                    </label>
+                    <select
+                      className="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500/50"
+                      value={mbSubject}
+                      onChange={(e) => setMbSubject(e.target.value as any)}
+                    >
+                      <option value="Microbit - Onam Exam">Onam Exam</option>
+                      <option value="Microbit - Christmas Exam">Christmas Exam</option>
+                      <option value="Microbit - Annual Exam">Annual Exam</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* File title */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+                      Material Title
+                    </label>
+                    <input
+                      id="mb-title-input"
+                      type="text"
+                      placeholder="e.g. Pre-Board Cheat Sheet"
+                      value={mbTitle}
+                      onChange={(e) => setMbTitle(e.target.value)}
+                      className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-600 outline-none focus:border-indigo-500/50"
+                    />
+                  </div>
+
+                  {/* Device PDF Selector */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+                      Link OR File Upload
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        id="mb-file-selector"
+                        type="url"
+                        placeholder="https://..."
+                        value={mbLink}
+                        onChange={(e) => setMbLink(e.target.value)}
+                        className="w-1/2 h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-600 outline-none focus:border-indigo-500/50"
+                      />
+                      <input
+                        type="file"
+                        onChange={(e) => setMbPhysicalFile(e.target.files ? e.target.files[0] : null)}
+                        className="w-1/2 h-10 p-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  id="mb-submit-btn"
+                  type="submit"
+                  disabled={mbSubmittingFile}
+                  className="w-full h-11 rounded-xl bg-indigo-600 text-slate-900 dark:text-white font-sans font-bold text-xs hover:bg-indigo-500 disabled:opacity-50 transition-all cursor-pointer outline-none"
+                >
+                  {mbSubmittingFile
+                    ? "Uploading Data to Storage..."
+                    : "Upload Micro:bit File"}
+                </button>
+              </form>
+            </div>
+          )}
+
           {/* TAB 4: LIBRARY MANAGER */}
           {activeTab === "library" && (
             <div className="space-y-6">
               <div className="border-b border-black/5 dark:border-white/5 pb-3">
                 <h2 className="font-sans font-bold text-base text-indigo-300">
-                  Global Library Manager
+                  Global Library Notes Manager
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Select a section to view all subjects and instantly delete
@@ -1403,6 +1825,144 @@ service cloud.firestore {
                             <span className="hidden sm:inline">Delete</span>
                           </button>
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: VIDEO LIBRARY MANAGER */}
+          {activeTab === "video_library" && (
+            <div className="space-y-6">
+              <div className="border-b border-black/5 dark:border-white/5 pb-3">
+                <h2 className="font-sans font-bold text-base text-indigo-300">
+                  Global Video Library Manager
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Select a section to view all subjects and instantly delete
+                  uploaded videos.
+                </p>
+              </div>
+
+              {/* Filters */}
+              <div className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-black/5 dark:border-white/5 space-y-4">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="flex-1">
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+                      Academic Class
+                    </label>
+                    <select
+                      className="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none"
+                      value={libraryVideoClass}
+                      onChange={(e) => setLibraryVideoClass(e.target.value as any)}
+                    >
+                      <option value="+1">Plus One (+1)</option>
+                      <option value="+2">Plus Two (+2)</option>
+                    </select>
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+                      Stream/Section
+                    </label>
+                    <select
+                      className="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none"
+                      value={libraryVideoStream}
+                      onChange={(e) => setLibraryVideoStream(e.target.value as any)}
+                    >
+                      <option value="Computer Science">Computer Science</option>
+                      <option value="Biology Science">Biology</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Library View */}
+              <div>
+                <h3 className="text-xs uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wider mb-3">
+                  Uploaded Videos
+                </h3>
+                {libraryVideoLoading ? (
+                  <p className="text-xs text-indigo-300">
+                    Loading video library contents...
+                  </p>
+                ) : libraryVideos.length === 0 ? (
+                  <p className="text-xs text-slate-500">
+                    No videos found in this section.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {libraryVideos.map((video) => (
+                      <div key={video.id} className="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-xl overflow-hidden">
+                        {editingVideo?.id === video.id ? (
+                           <div className="p-4 space-y-4">
+                             <h4 className="text-xs font-bold text-indigo-400">Edit Video details</h4>
+                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                   <label className="text-[10px] text-slate-500 font-semibold block mb-1">Title</label>
+                                   <input type="text" value={editingVideo.title} onChange={(e) => setEditingVideo({...editingVideo, title: e.target.value})} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none" />
+                                </div>
+                                <div>
+                                   <label className="text-[10px] text-slate-500 font-semibold block mb-1">Chapter</label>
+                                   <input type="text" value={editingVideo.chapter} onChange={(e) => setEditingVideo({...editingVideo, chapter: e.target.value})} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none" />
+                                </div>
+                                <div>
+                                   <label className="text-[10px] text-slate-500 font-semibold block mb-1">Part</label>
+                                   <input type="number" value={editingVideo.part} onChange={(e) => setEditingVideo({...editingVideo, part: parseInt(e.target.value)})} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none" />
+                                </div>
+                                <div>
+                                   <label className="text-[10px] text-slate-500 font-semibold block mb-1">YouTube Link</label>
+                                   <input type="url" value={editingVideo.videoUrl || (editingVideo as any).link || ""} onChange={(e) => setEditingVideo({...editingVideo, videoUrl: e.target.value, link: e.target.value} as any)} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none" />
+                                </div>
+                             </div>
+                             <div className="flex justify-end gap-2 mt-3">
+                                <button onClick={() => setEditingVideo(null)} className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-500 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">Cancel</button>
+                                <button onClick={handleUpdateVideoSubmit} disabled={editVideoSubmitting} className="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 transition-colors">{editVideoSubmitting ? 'Saving...' : 'Save Changes'}</button>
+                             </div>
+                           </div>
+                        ) : (
+                          <div className="p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between text-left font-sans text-xs gap-3">
+                            <div className="flex gap-3 w-full sm:w-auto">
+                              <div className="w-10 h-10 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                                <Video className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <span className="block text-slate-900 dark:text-white font-bold text-sm">
+                                  {video.title}
+                                </span>
+                                <span className="text-[10px] text-amber-400 font-bold tracking-wide mt-0.5 block">
+                                  {video.subject} &bull; {video.chapter} (Part {video.part})
+                                </span>
+                                <span className="text-[9px] text-slate-600 dark:text-slate-400 font-mono block mt-0.5">
+                                  {new Date(video.uploadedAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 w-full sm:w-auto justify-end">
+                              <button
+                                onClick={() => setEditingVideo(video)}
+                                className="p-2 sm:px-4 sm:py-2 flex items-center justify-center rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 transition-colors font-semibold"
+                              >
+                                <Pencil className="w-4 h-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Edit</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  handleDeleteVideo(video.id).then(() => {
+                                    setLibraryVideos((prev) =>
+                                      prev.filter((p) => p.id !== video.id),
+                                    );
+                                  });
+                                }}
+                                className="p-2 sm:px-4 sm:py-2 flex items-center justify-center rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition-colors font-semibold"
+                              >
+                                <Trash2 className="w-4 h-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Delete</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

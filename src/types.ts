@@ -22,6 +22,29 @@ export interface PdfAsset {
   uploadedAt: string; // ISO String
 }
 
+export interface MicrobitAsset {
+  id: string;
+  title: string;
+  class: "+1" | "+2" | "";
+  stream: "Computer Science" | "Biology Science" | "";
+  subject: string;
+  fileUrl: string;
+  fileName: string;
+  uploadedAt: string; // ISO String
+}
+
+export interface VideoAsset {
+  id: string;
+  title: string;
+  class: "+1" | "+2";
+  stream: "Computer Science" | "Biology Science";
+  subject: string;
+  chapter: string;
+  part: number;
+  videoUrl: string;
+  uploadedAt: string; // ISO String
+}
+
 export interface BannerAsset {
   id: string;
   imageUrl: string;

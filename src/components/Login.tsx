@@ -6,7 +6,7 @@ import { Student } from "../types";
 import { useTheme } from "../ThemeContext";
 
 interface LoginProps {
-  onSuccess: (student: Student) => void;
+  onSuccess: (student: Student, justSignedUp?: boolean) => void;
   onAdminOpen: () => void;
 }
 
@@ -16,6 +16,7 @@ export default function Login({ onSuccess, onAdminOpen }: LoginProps) {
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("+91");
   const [name, setName] = useState("");
+  const [logoClicks, setLogoClicks] = useState(0);
   const [isSignUp, setIsSignUp] = useState(true);
   const [appConfig, setAppConfig] = useState<any>({});
 
@@ -55,7 +56,7 @@ export default function Login({ onSuccess, onAdminOpen }: LoginProps) {
         student = await loginWithEmail(simulatedEmail, password);
       }
       if (student) {
-        onSuccess(student);
+        onSuccess(student, isSignUp);
       }
     } catch (e: any) {
       if (e.code === 'auth/email-already-in-use') {
@@ -77,7 +78,18 @@ export default function Login({ onSuccess, onAdminOpen }: LoginProps) {
     >
       {/* Top action bar */}
       <div className="flex justify-between items-center w-full max-w-md mx-auto">
-        <div className="flex items-center gap-2">
+        <div 
+          className="flex items-center gap-2 cursor-pointer"
+          onClick={() => {
+            const next = logoClicks + 1;
+            if (next >= 6) {
+              setLogoClicks(0);
+              onAdminOpen();
+            } else {
+              setLogoClicks(next);
+            }
+          }}
+        >
           {appConfig?.appLogoUrl ? (
             <img src={appConfig.appLogoUrl} alt="App Logo" className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
           ) : (
@@ -87,15 +99,7 @@ export default function Login({ onSuccess, onAdminOpen }: LoginProps) {
         </div>
         
         <div className="flex justify-end gap-2">
-          {/* Admin Button top right */}
-          <button
-            id="admin-entry-btn"
-            onClick={onAdminOpen}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-indigo-50 dark:bg-white/5 text-indigo-600 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-500/30 font-sans font-bold text-xs shadow-sm hover:bg-indigo-100 active:scale-95 transition-all outline-none"
-          >
-            <KeyRound className="w-3.5 h-3.5" />
-            <span>Admin</span>
-          </button>
+           {/* Admin button removed */}
         </div>
       </div>
       <div className="flex flex-col items-center justify-center my-auto w-full max-w-md mx-auto">

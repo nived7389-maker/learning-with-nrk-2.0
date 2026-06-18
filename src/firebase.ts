@@ -24,6 +24,7 @@ import {
   query,
   where,
   deleteDoc,
+  setLogLevel
 } from "firebase/firestore";
 import {
   getStorage,
@@ -66,6 +67,7 @@ try {
   auth = getAuth(app);
   setPersistence(auth, browserLocalPersistence).catch((err) => console.error("Persistence error", err));
   db = getFirestore(app);
+  setLogLevel("silent");
   storage = getStorage(app);
 } catch (error) {
   console.error("Firebase initialization failed:", error);
@@ -429,7 +431,7 @@ export async function fetchBanners(): Promise<BannerAsset[]> {
 export async function fetchPDFs(
   classRoom: string,
   stream: string,
-  subject: string,
+  subject?: string,
 ): Promise<PdfAsset[]> {
   if (useLocalMock) {
     const pdfs = getLocalData<PdfAsset[]>("pdfs", []);
@@ -437,17 +439,26 @@ export async function fetchPDFs(
       (pdf) =>
         pdf.class === classRoom &&
         pdf.stream === stream &&
-        pdf.subject.toLowerCase() === subject.toLowerCase(),
+        (!subject || pdf.subject.toLowerCase() === subject.toLowerCase()),
     );
   }
 
   try {
-    const q = query(
-      collection(db, "pdfs"),
-      where("class", "==", classRoom),
-      where("stream", "==", stream),
-      where("subject", "==", subject),
-    );
+    let q;
+    if (subject) {
+      q = query(
+        collection(db, "pdfs"),
+        where("class", "==", classRoom),
+        where("stream", "==", stream),
+        where("subject", "==", subject),
+      );
+    } else {
+      q = query(
+        collection(db, "pdfs"),
+        where("class", "==", classRoom),
+        where("stream", "==", stream),
+      );
+    }
     const snap = await getDocs(q);
     const results: PdfAsset[] = [];
     snap.forEach((doc) => {
@@ -489,6 +500,82 @@ export async function fetchLibraryPDFs(
     return results;
   } catch (err) {
     console.error("fetchLibraryPDFs failed:", err);
+    return [];
+  }
+}
+
+export async function fetchVideos(
+  classRoom: string,
+  stream: string,
+  subject?: string,
+): Promise<any[]> {
+  try {
+    let q;
+    if (subject) {
+      q = query(
+        collection(db, "videos"),
+        where("class", "==", classRoom),
+        where("stream", "==", stream),
+        where("subject", "==", subject),
+      );
+    } else {
+      q = query(
+        collection(db, "videos"),
+        where("class", "==", classRoom),
+        where("stream", "==", stream),
+      );
+    }
+    const snap = await getDocs(q);
+    const results: any[] = [];
+    snap.forEach((doc) => {
+      results.push(doc.data());
+    });
+    return results;
+  } catch (err) {
+    console.error("fetchVideos failed:", err);
+    return [];
+  }
+}
+
+export async function fetchMicrobits(
+  classRoom: string,
+  stream: string,
+  subject?: string,
+): Promise<any[]> {
+  if (useLocalMock) {
+    const mbits = getLocalData<any[]>("microbits", []);
+    return mbits.filter(
+      (m) =>
+        m.class === classRoom &&
+        m.stream === stream &&
+        (!subject || m.subject.toLowerCase() === subject.toLowerCase()),
+    );
+  }
+
+  try {
+    let q;
+    if (subject) {
+      q = query(
+        collection(db, "microbits"),
+        where("class", "==", classRoom),
+        where("stream", "==", stream),
+        where("subject", "==", subject),
+      );
+    } else {
+      q = query(
+        collection(db, "microbits"),
+        where("class", "==", classRoom),
+        where("stream", "==", stream),
+      );
+    }
+    const snap = await getDocs(q);
+    const results: any[] = [];
+    snap.forEach((doc) => {
+      results.push(doc.data());
+    });
+    return results;
+  } catch (err) {
+    console.error("fetchMicrobits failed:", err);
     return [];
   }
 }
@@ -819,6 +906,162 @@ export async function adminDeletePDF(
     }
   } catch (err) {
     console.error("adminDeletePDF error:", err);
+    throw err;
+  }
+}
+
+// Upload Microbit File (Physical)
+export async function adminUploadMicrobitFile(
+  title: string,
+  classRoom: "+1" | "+2",
+  stream: "Computer Science" | "Biology Science",
+  subject: string,
+  file: File
+): Promise<void> {
+  const newId = "microbit_" + Date.now();
+  if (useLocalMock) return;
+
+  try {
+    const storageRefPath = `microbits/${newId}_${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+    const fileRef = ref(storage, storageRefPath);
+    await uploadBytes(fileRef, file);
+    const fileUrl = await getDownloadURL(fileRef);
+
+    const docRef = doc(db, "microbits", newId);
+    await setDoc(docRef, {
+      id: newId,
+      title,
+      class: classRoom,
+      stream,
+      subject,
+      fileUrl,
+      fileName: file.name,
+      uploadedAt: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    console.error("adminUploadMicrobitFile failed:", err);
+    throw err;
+  }
+}
+
+// Upload Microbit Link
+export async function adminUploadMicrobit(
+  title: string,
+  classRoom: "+1" | "+2",
+  stream: "Computer Science" | "Biology Science",
+  subject: string,
+  fileLink: string,
+): Promise<void> {
+  const newId = "microbit_" + Date.now();
+  if (useLocalMock) {
+    const mbits = getLocalData<any[]>("microbits", []);
+    mbits.push({
+      id: newId,
+      title,
+      class: classRoom,
+      stream,
+      subject,
+      fileUrl: fileLink,
+      fileName: title,
+      uploadedAt: new Date().toISOString(),
+    });
+    setLocalData("microbits", mbits);
+    return;
+  }
+
+  try {
+    const docRef = doc(db, "microbits", newId);
+    await setDoc(docRef, {
+      id: newId,
+      title,
+      class: classRoom,
+      stream,
+      subject,
+      fileUrl: fileLink,
+      fileName: title,
+      uploadedAt: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    console.error("adminUploadMicrobit failed:", err);
+    throw err;
+  }
+}
+
+// Delete Microbit
+// Upload Video
+export async function adminUploadVideo(
+  title: string,
+  classRoom: "+1" | "+2",
+  stream: "Computer Science" | "Biology Science",
+  subject: string,
+  chapter: string,
+  part: number,
+  videoUrl: string,
+): Promise<void> {
+  const newId = "video_" + Date.now();
+  try {
+    const docRef = doc(db, "videos", newId);
+    await setDoc(docRef, {
+      id: newId,
+      title,
+      class: classRoom,
+      stream,
+      subject,
+      chapter,
+      part,
+      videoUrl,
+      uploadedAt: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    console.error("adminUploadVideo failed:", err);
+    throw err;
+  }
+}
+
+// Update Video
+export async function adminUpdateVideo(
+  id: string,
+  updates: Partial<{
+    title: string;
+    class: "+1" | "+2";
+    stream: "Computer Science" | "Biology Science";
+    subject: string;
+    chapter: string;
+    part: number;
+    videoUrl: string;
+  }>
+): Promise<void> {
+  try {
+    const docRef = doc(db, "videos", id);
+    await updateDoc(docRef, updates);
+  } catch (err) {
+    console.error("adminUpdateVideo error:", err);
+    throw err;
+  }
+}
+
+// Delete Video
+export async function adminDeleteVideo(id: string): Promise<void> {
+  try {
+    const docRef = doc(db, "videos", id);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.error("adminDeleteVideo error:", err);
+    throw err;
+  }
+}
+
+export async function adminDeleteMicrobit(id: string): Promise<void> {
+  if (useLocalMock) {
+    const mbits = getLocalData<any[]>("microbits", []);
+    setLocalData("microbits", mbits.filter((m) => m.id !== id));
+    return;
+  }
+  try {
+    const docRef = doc(db, "microbits", id);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.error("adminDeleteMicrobit error:", err);
     throw err;
   }
 }

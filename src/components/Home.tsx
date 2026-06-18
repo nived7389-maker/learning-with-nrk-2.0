@@ -1,13 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import ReactPlayer from "react-player";
 import { 
   Atom, FlaskConical, Calculator, BookOpen, GraduationCap, 
   Download, Eye, AlertCircle, Sparkles, Search, 
   ArrowLeft, FileText, CheckCircle2, ChevronRight, HelpCircle,
-  Cpu, Dna, BookA, Languages, PenTool, Pi, Phone
+  Cpu, Dna, BookA, Languages, PenTool, Pi, Phone, Video,
+  Play, Pause, FastForward, Rewind, Maximize, Brain
 } from "lucide-react";
 import { Student, PdfAsset, BannerAsset, Subscription } from "../types";
-import { fetchBanners, fetchPDFs, listenToUserSubscription, listenAppConfig } from "../firebase";
+import { fetchBanners, fetchPDFs, listenToUserSubscription, listenAppConfig, fetchMicrobits, fetchVideos } from "../firebase";
 import { BotLogo } from "./BotLogo";
 
 interface HomeProps {
@@ -35,6 +37,8 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
   const [appConfig, setAppConfig] = useState<any>({});
   const [activeBannerIdx, setActiveBannerIdx] = useState(0);
   const [pdfs, setPdfs] = useState<PdfAsset[]>([]);
+  const [videos, setVideos] = useState<any[]>([]);
+  const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
   const [subState, setSubState] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -43,6 +47,18 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
   // Modal controllers
   const [showSubUpgradeModal, setShowSubUpgradeModal] = useState(false);
   const [viewingPdf, setViewingPdf] = useState<PdfAsset | null>(null);
+  const [viewingVideo, setViewingVideo] = useState<any | null>(null);
+  
+  // Video Player specific states
+  const playerRef = useRef<ReactPlayer>(null);
+  const [playing, setPlaying] = useState(true);
+
+  // If subject is deselected from outside, reset chapter
+  useEffect(() => {
+    if (!selectedSubject) {
+      setSelectedChapter(null);
+    }
+  }, [selectedSubject]);
 
   // Load subscriptions & banners
   useEffect(() => {
@@ -81,16 +97,27 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
   };
 
 
-  // Load subject PDFs when subject changes
+  // Load subject Videos when subject changes
   useEffect(() => {
     if (selectedSubject && student.class && student.stream) {
       setLoading(true);
-      fetchPDFs(student.class, student.stream, selectedSubject)
-        .then(list => {
-          setPdfs(list);
+      if (selectedSubject.startsWith("Microbit - ")) {
+        fetchMicrobits(student.class, student.stream, selectedSubject).then((mbits) => {
+          setPdfs(mbits);
           setLoading(false);
-        })
-        .catch(() => setLoading(false));
+        }).catch(() => {
+          setPdfs([]);
+          setLoading(false);
+        });
+      } else {
+        fetchVideos(student.class, student.stream, selectedSubject).then((vids) => {
+          setVideos(vids);
+          setLoading(false);
+        }).catch(() => {
+          setVideos([]);
+          setLoading(false);
+        });
+      }
     }
   }, [selectedSubject, student]);
 
@@ -108,15 +135,31 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
     setViewingPdf(pdf);
   };
 
-  // Handle PDF download
-  const handleDownloadPdf = async (pdf: PdfAsset) => {
+  // Video playback controls
+  const handleFullscreen = () => {
+    // Basic wrapper to fullscreen just the player container
+    const elem = document.getElementById("video-player-container");
+    if (elem) {
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+      } else if ((elem as any).webkitRequestFullscreen) { /* Safari */
+        (elem as any).webkitRequestFullscreen();
+      } else if ((elem as any).msRequestFullscreen) { /* IE11 */
+        (elem as any).msRequestFullscreen();
+      }
+    }
+  };
+
+// Handle PDF download
+  const handleDownloadPdf = async (pdf: any) => {
     if (student.status === "pending" || !subState || subState.status !== "active") {
       setShowSubUpgradeModal(true);
       return;
     }
     
+    const targetUrl = pdf.pdfUrl || pdf.fileUrl;
     try {
-      const response = await fetch(pdf.pdfUrl);
+      const response = await fetch(targetUrl);
       const blob = await response.blob();
       const blobURL = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -128,7 +171,7 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
       URL.revokeObjectURL(blobURL);
     } catch (e) {
       console.error("Download failed, opening in new tab instead", e);
-      window.open(pdf.pdfUrl, "_blank");
+      window.open(targetUrl, "_blank");
     }
   };
 
@@ -171,7 +214,7 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
               <div className="flex flex-col gap-2.5">
                 <button
                   onClick={() => {
-                    const message = `Want a new subscription.\nName: ${student.name}\nPhone: ${student.phone || "Not provided"}`;
+                    const message = `want a subscription`;
                     window.open(`https://wa.me/918848198680?text=${encodeURIComponent(message)}`, "_blank");
                   }}
                   className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-emerald-600 text-white font-sans font-semibold text-xs hover:bg-emerald-500 active:scale-95 transition-all text-center"
@@ -218,7 +261,7 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
             <div className="flex-1 flex flex-col items-center justify-center p-2 md:p-6 w-full">
               <div className="w-full h-full max-w-4xl bg-slate-200 dark:bg-slate-800 rounded-2xl overflow-hidden shadow-2xl border border-slate-300 dark:border-slate-700 relative">
                 <iframe
-                  src={`${viewingPdf.pdfUrl}#toolbar=0`}
+                  src={`${(viewingPdf as any).pdfUrl || (viewingPdf as any).fileUrl}#toolbar=0`}
                   title={viewingPdf.title}
                   className="w-full h-full absolute inset-0"
                 />
@@ -233,6 +276,95 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
                 <Download className="w-3.5 h-3.5" />
                 <span>Save Offline File</span>
               </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* FULLSCREEN VIDEO VIEW MODAL */}
+        {viewingVideo && (
+          <motion.div
+            id="video-view-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col bg-slate-950 text-white"
+          >
+            {/* Nav area */}
+            <div className="flex items-center justify-between p-4 bg-slate-900 border-b border-white/5 shadow-md shrink-0">
+              <button
+                onClick={() => {
+                   setPlaying(false);
+                   setTimeout(() => setViewingVideo(null), 100);
+                }}
+                className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Return to chapter</span>
+              </button>
+              <h3 className="font-sans font-semibold text-xs truncate max-w-[140px] md:max-w-xs">{viewingVideo.title}</h3>
+              <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
+                 <Video className="w-4 h-4 text-rose-400" />
+              </div>
+            </div>
+
+            {/* Video Player */}
+            <div className="flex-1 overflow-y-auto w-full max-w-5xl mx-auto p-4 md:p-6 lg:p-8 space-y-6">
+              <div className="w-full bg-black rounded-3xl overflow-hidden shadow-2xl relative" id="video-player-container">
+                <div className="aspect-video relative group bg-black/90">
+                  <ReactPlayer
+                    ref={playerRef}
+                    url={viewingVideo.videoUrl || viewingVideo.link}
+                    className="absolute top-0 left-0"
+                    width="100%"
+                    height="100%"
+                    controls={true}
+                    playing={playing}
+                    onPlay={() => setPlaying(true)}
+                    onPause={() => setPlaying(false)}
+                    config={{
+                      youtube: {
+                         playerVars: { 
+                           modestbranding: 1,
+                           rel: 0,
+                         }
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Video Bottom Panel */}
+              <div className="flex flex-col justify-end md:flex-row items-center gap-4 bg-slate-900 border border-white/5 rounded-2xl p-4 shadow-xl">
+                 <div className="flex gap-4">
+                   <button onClick={handleFullscreen} className="flex flex-col items-center gap-1 group text-slate-400 hover:text-white transition-colors">
+                     <div className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 group-hover:bg-white/10 transition-colors">
+                        <Maximize className="w-5 h-5" />
+                     </div>
+                     <span className="text-[10px] font-sans font-bold">Full Screen</span>
+                   </button>
+                 </div>
+
+                 {/* Doubts AI clearance option by Astr AI */}
+                 {onOpenAI && (
+                   <button 
+                     onClick={() => {
+                       // We can auto-trigger the AI and maybe pass the video context
+                       setPlaying(false);
+                       setTimeout(() => setViewingVideo(null), 100);
+                       onOpenAI();
+                     }} 
+                     className="relative inline-flex items-center gap-3 px-6 py-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-all group overflow-hidden"
+                   >
+                     <div className="absolute inset-0 bg-cyan-400/10 w-0 group-hover:w-full transition-all duration-500 ease-out z-0" />
+                     <Brain className="w-5 h-5 relative z-10" />
+                     <div className="text-left relative z-10">
+                       <span className="block text-[10px] uppercase font-bold tracking-widest text-cyan-300">Astr AI</span>
+                       <span className="block text-xs font-semibold text-white mt-0.5">Clear Doubts in Malayalam/English</span>
+                     </div>
+                     <Sparkles className="w-4 h-4 text-cyan-300 ml-2 relative z-10 opacity-50 group-hover:opacity-100 group-hover:rotate-12 transition-all" />
+                   </button>
+                 )}
+              </div>
             </div>
           </motion.div>
         )}
@@ -376,7 +508,13 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
           <div className="flex items-center gap-3">
             <button
               id="back-to-home-from-sub-btn"
-              onClick={onBackToHome}
+              onClick={() => {
+                if (selectedChapter) {
+                  setSelectedChapter(null);
+                } else {
+                  onBackToHome();
+                }
+              }}
               className="w-10 h-10 rounded-full bg-black/5 dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:bg-black/5 dark:bg-white/10 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors cursor-pointer outline-none"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -385,96 +523,198 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-mono text-indigo-400 uppercase tracking-widest">{student.class} Science</span>
                 <span className="text-slate-500 font-mono text-[9px] uppercase">&bull; {selectedSubject}</span>
+                {selectedChapter && (
+                   <span className="text-slate-500 font-mono text-[9px] uppercase">&bull; {selectedChapter}</span>
+                )}
               </div>
               <h2 id="subject-inner-title" className="font-sans font-extrabold text-xl text-slate-900 dark:text-white leading-none">
-                {selectedSubject} Notes
+                {selectedChapter ? selectedChapter : (selectedSubject.startsWith("Microbit") ? selectedSubject : `${selectedSubject} Chapters`)}
               </h2>
             </div>
           </div>
 
-          {/* Search Study material files block */}
-          <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 dark:text-slate-400" />
-            <input 
-              id="pdf-search-input"
-              type="text"
-              placeholder="Search PDF notes by code/title..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-11 pl-10 pr-4 rounded-xl bg-black/5 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-xs text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:border-indigo-500/50 transition-all font-sans"
-            />
-          </div>
+          {/* Search block */}
+          {(!selectedSubject.startsWith("Microbit") && !selectedChapter) ? (
+            <div className="relative">
+               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 dark:text-slate-400" />
+               <input 
+                 type="text"
+                 placeholder="Search chapters..."
+                 value={searchQuery}
+                 onChange={(e) => setSearchQuery(e.target.value)}
+                 className="w-full h-11 pl-10 pr-4 rounded-xl bg-black/5 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-xs text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:border-indigo-500/50 transition-all font-sans"
+               />
+             </div>
+          ) : (
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 dark:text-slate-400" />
+              <input 
+                id="pdf-search-input"
+                type="text"
+                placeholder={selectedSubject.startsWith("Microbit") ? "Search materials by title..." : "Search videos in chapter..."}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full h-11 pl-10 pr-4 rounded-xl bg-black/5 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-xs text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:border-indigo-500/50 transition-all font-sans"
+              />
+            </div>
+          )}
 
-          {/* study materials list */}
-          <div>
-            <span className="font-mono text-[10px] tracking-wider text-slate-500 dark:text-slate-400 uppercase block mb-3.5">
-              Available Files ({filteredPdfs.length})
-            </span>
-
-            {loading ? (
-              <div className="text-center py-12">
-                <div className="w-7 h-7 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                <span className="text-xs font-sans text-slate-600 dark:text-slate-400">Syncing digital assets...</span>
-              </div>
-            ) : filteredPdfs.length === 0 ? (
-              <div className="text-center py-16 bg-white/[0.02] border border-dashed border-slate-200 dark:border-white/5 rounded-2xl p-6">
-                <FileText className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-                <p className="font-sans text-xs font-semibold text-slate-300">No content uploaded yet</p>
-                <p className="font-sans text-[11px] text-slate-500 max-w-xs mx-auto mt-1">
-                  NRK administrator is currently compiling studies for this subject. PDFs automatically stream live here once published.
-                </p>
-              </div>
-            ) : (
-              <div id="subject-pdf-list" className="space-y-3.5">
-                {filteredPdfs.map((pdf) => {
-                  return (
-                    <div 
-                      key={pdf.id}
-                      id={`pdf-row-${pdf.id}`}
-                      className="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col md:flex-row justify-between md:items-center gap-4 transition-all hover:bg-black/5 dark:bg-white/10 relative overflow-hidden"
-                    >
-                      <div className="flex gap-3.5 text-left">
-                        <div className="w-10 h-10 shrink-0 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-                          <FileText className="w-5 h-5 text-orange-400" />
-                        </div>
-                        <div className="font-sans">
-                          <h4 id={`pdf-title-${pdf.id}`} className="text-xs font-extrabold text-slate-900 dark:text-white leading-tight mb-1 truncate max-w-[190px] sm:max-w-xs">{pdf.title}</h4>
-                          <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-600 dark:text-slate-400">
-                            <span className="font-mono bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded text-indigo-400">{pdf.class} Science</span>
-                            <span>&bull;</span>
-                            <span className="font-mono">{new Date(pdf.uploadedAt).toLocaleDateString()}</span>
+          {/* Content Views */}
+          {selectedSubject.startsWith("Microbit") ? (
+             <div>
+                <span className="font-mono text-[10px] tracking-wider text-slate-500 dark:text-slate-400 uppercase block mb-3.5">
+                  Available Materials ({filteredPdfs.length})
+                </span>
+                {loading ? (
+                  <div className="text-center py-12">
+                    <div className="w-7 h-7 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                    <span className="text-xs font-sans text-slate-600 dark:text-slate-400">Syncing digital assets...</span>
+                  </div>
+                ) : filteredPdfs.length === 0 ? (
+                  <div className="text-center py-16 bg-white/[0.02] border border-dashed border-slate-200 dark:border-white/5 rounded-2xl p-6">
+                    <FileText className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+                    <p className="font-sans text-xs font-semibold text-slate-300">No content uploaded yet</p>
+                    <p className="font-sans text-[11px] text-slate-500 max-w-xs mx-auto mt-1">
+                       Administrator is currently compiling materials for this subject.
+                    </p>
+                  </div>
+                ) : (
+                  <div id="subject-pdf-list" className="space-y-3.5">
+                    {filteredPdfs.map((pdf) => (
+                        <div 
+                          key={pdf.id}
+                          className="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col md:flex-row justify-between md:items-center gap-4 transition-all hover:bg-black/5 dark:bg-white/10 relative overflow-hidden"
+                        >
+                          <div className="flex gap-3.5 text-left">
+                            <div className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center bg-violet-500/10 border border-violet-500/20">
+                              <FileText className="w-5 h-5 text-violet-400" />
+                            </div>
+                            <div className="font-sans">
+                              <h4 className="text-xs font-extrabold text-slate-900 dark:text-white leading-tight mb-1 truncate max-w-[190px] sm:max-w-xs">{pdf.title}</h4>
+                              <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-600 dark:text-slate-400">
+                                <span className="font-mono bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded text-indigo-400">{pdf.class} Science</span>
+                                <span>&bull;</span>
+                                <span className="font-mono">{new Date(pdf.uploadedAt).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 mt-2 md:mt-0 shrink-0">
+                            <button
+                              onClick={() => handleViewPdf(pdf)}
+                              className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[10.5px] font-sans font-semibold text-indigo-300 hover:bg-indigo-500/20 transition-all cursor-pointer outline-none"
+                            >
+                              <BookOpen className="w-3.5 h-3.5" />
+                              <span>View</span>
+                            </button>
+                            <button
+                              onClick={() => handleDownloadPdf(pdf)}
+                              className="w-9 h-9 rounded-xl bg-black/5 dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:bg-black/5 dark:bg-white/10 flex flex-col items-center justify-center text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer outline-none shrink-0"
+                              title="Download Secure PDF Offline"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
+                    ))}
+                  </div>
+                )}
+             </div>
+          ) : (
+             <div>
+                {/* Regular video handling */}
+                {!selectedChapter ? (
+                  <div>
+                    {/* Chapter list view */}
+                    {loading ? (
+                      <div className="text-center py-12">
+                        <div className="w-7 h-7 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                        <span className="text-xs font-sans text-slate-600 dark:text-slate-400">Loading chapters...</span>
                       </div>
-
-                      {/* Actions buttons panel */}
-                      <div className="flex items-center gap-2 mt-2 md:mt-0 shrink-0">
-                        {/* VIEW SECURE DRM */}
-                        <button
-                          id={`pdf-view-btn-${pdf.id}`}
-                          onClick={() => handleViewPdf(pdf)}
-                          className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[10.5px] font-sans font-semibold text-indigo-300 hover:bg-indigo-500/20 transition-all cursor-pointer outline-none"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>View PDF</span>
-                        </button>
-
-                        {/* DOWNLOAD FILE */}
-                        <button
-                          id={`pdf-download-btn-${pdf.id}`}
-                          onClick={() => handleDownloadPdf(pdf)}
-                          className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-green-500/10 border border-green-500/20 text-[10.5px] font-sans font-semibold text-green-400 hover:bg-green-500/20 transition-all cursor-pointer outline-none"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Download</span>
-                        </button>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {Array.from(new Set(videos.map(v => v.chapter)))
+                           .filter(ch => ch.toLowerCase().includes(searchQuery.toLowerCase()))
+                           .map(chapter => {
+                             const chapterVideos = videos.filter(v => v.chapter === chapter);
+                             return (
+                               <button
+                                 key={chapter}
+                                 onClick={() => setSelectedChapter(chapter)}
+                                 className="text-left p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:bg-black/5 dark:bg-white/10 transition-all group outline-none"
+                               >
+                                 <div className="flex gap-3.5 items-center">
+                                   <div className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center bg-rose-500/10 border border-rose-500/20">
+                                     <Play className="w-5 h-5 text-rose-400 ml-0.5 group-hover:scale-110 transition-transform" />
+                                   </div>
+                                   <div>
+                                      <h4 className="text-sm font-extrabold text-slate-900 dark:text-white leading-tight mb-1">{chapter}</h4>
+                                      <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400">{chapterVideos.length} Parts Available</span>
+                                   </div>
+                                 </div>
+                               </button>
+                             )
+                           })
+                        }
+                        {videos.length === 0 && (
+                          <div className="col-span-1 md:col-span-2 text-center py-16 bg-white/[0.02] border border-dashed border-slate-200 dark:border-white/5 rounded-2xl p-6">
+                            <Video className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+                            <p className="font-sans text-xs font-semibold text-slate-300">No chapters mapped</p>
+                            <p className="font-sans text-[11px] text-slate-500 max-w-xs mx-auto mt-1">
+                               Administrator is currently compiling sections.
+                            </p>
+                          </div>
+                        )}
                       </div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    {/* Specific chapter view */}
+                    <div className="space-y-3.5">
+                      {videos
+                        .filter(v => v.chapter === selectedChapter && v.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                        .sort((a, b) => a.part - b.part)
+                        .map(video => (
+                          <div 
+                            key={video.id}
+                            className="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col md:flex-row justify-between md:items-center gap-4 transition-all hover:bg-black/5 dark:bg-white/10 relative overflow-hidden"
+                          >
+                            <div className="flex gap-3.5 text-left">
+                              <div className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center bg-rose-500/10 border border-rose-500/20">
+                                <Video className="w-5 h-5 text-rose-400" />
+                              </div>
+                              <div className="font-sans">
+                                <h4 className="text-xs font-extrabold text-slate-900 dark:text-white leading-tight mb-1 truncate max-w-[190px] sm:max-w-xs">{video.title}</h4>
+                                <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-600 dark:text-slate-400">
+                                  <span className="font-mono bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded text-rose-400">Part {video.part}</span>
+                                  <span>&bull;</span>
+                                  <span className="font-mono">{new Date(video.uploadedAt).toLocaleDateString()}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 mt-2 md:mt-0 shrink-0">
+                              <button
+                                onClick={() => {
+                                  if (student.status === "pending" || !subState || subState.status !== "active") {
+                                    setShowSubUpgradeModal(true);
+                                    return;
+                                  }
+                                  setPlaying(true);
+                                  setViewingVideo(video);
+                                }}
+                                className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-[10.5px] font-sans font-semibold text-rose-300 hover:bg-rose-500/20 transition-all cursor-pointer outline-none"
+                              >
+                                <Play className="w-3.5 h-3.5" />
+                                <span>Watch Video</span>
+                              </button>
+                            </div>
+                          </div>
+                      ))}
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                  </div>
+                )}
+             </div>
+          )}
         </motion.div>
       )}
 
