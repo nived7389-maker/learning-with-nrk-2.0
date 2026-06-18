@@ -462,7 +462,8 @@ export async function fetchPDFs(
     const snap = await getDocs(q);
     const results: PdfAsset[] = [];
     snap.forEach((doc) => {
-      results.push(doc.data() as PdfAsset);
+      const data = doc.data() as Record<string, any>;
+      results.push({ id: doc.id, ...data } as PdfAsset);
     });
     return results;
   } catch (err) {
@@ -495,7 +496,8 @@ export async function fetchLibraryPDFs(
     const snap = await getDocs(q);
     const results: PdfAsset[] = [];
     snap.forEach((doc) => {
-      results.push(doc.data() as PdfAsset);
+      const data = doc.data() as Record<string, any>;
+      results.push({ id: doc.id, ...data } as PdfAsset);
     });
     return results;
   } catch (err) {
@@ -528,7 +530,8 @@ export async function fetchVideos(
     const snap = await getDocs(q);
     const results: any[] = [];
     snap.forEach((doc) => {
-      results.push(doc.data());
+      const data = doc.data() as Record<string, any>;
+      results.push({ id: doc.id, ...data });
     });
     return results;
   } catch (err) {
@@ -571,7 +574,8 @@ export async function fetchMicrobits(
     const snap = await getDocs(q);
     const results: any[] = [];
     snap.forEach((doc) => {
-      results.push(doc.data());
+      const data = doc.data() as Record<string, any>;
+      results.push({ id: doc.id, ...data });
     });
     return results;
   } catch (err) {

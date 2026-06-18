@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import ReactPlayer from "react-player";
+import YouTubeLessonPlayer from "./YouTubeLessonPlayer";
 import { 
   Atom, FlaskConical, Calculator, BookOpen, GraduationCap, 
   Download, Eye, AlertCircle, Sparkles, Search, 
@@ -48,10 +48,8 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
   const [showSubUpgradeModal, setShowSubUpgradeModal] = useState(false);
   const [viewingPdf, setViewingPdf] = useState<PdfAsset | null>(null);
   const [viewingVideo, setViewingVideo] = useState<any | null>(null);
-  
-  // Video Player specific states
-  const playerRef = useRef<ReactPlayer>(null);
-  const [playing, setPlaying] = useState(true);
+  const [isClosingVideo, setIsClosingVideo] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
 
   // If subject is deselected from outside, reset chapter
   useEffect(() => {
@@ -135,22 +133,7 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
     setViewingPdf(pdf);
   };
 
-  // Video playback controls
-  const handleFullscreen = () => {
-    // Basic wrapper to fullscreen just the player container
-    const elem = document.getElementById("video-player-container");
-    if (elem) {
-      if (elem.requestFullscreen) {
-        elem.requestFullscreen();
-      } else if ((elem as any).webkitRequestFullscreen) { /* Safari */
-        (elem as any).webkitRequestFullscreen();
-      } else if ((elem as any).msRequestFullscreen) { /* IE11 */
-        (elem as any).msRequestFullscreen();
-      }
-    }
-  };
-
-// Handle PDF download
+  // Handle PDF download
   const handleDownloadPdf = async (pdf: any) => {
     if (student.status === "pending" || !subState || subState.status !== "active") {
       setShowSubUpgradeModal(true);
@@ -180,6 +163,22 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
     pdf.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     pdf.fileName.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Helper to extract clean URL if user pastes an iframe or weird format
+  const getCleanVideoUrl = (rawUrl: string) => {
+    if (!rawUrl) return "";
+    let url = rawUrl.trim();
+    // Extract src if it's an iframe snippet
+    if (url.includes("<iframe") && url.includes("src=")) {
+      const match = url.match(/src=["']([^"']+)["']/);
+      if (match && match[1]) {
+        url = match[1];
+      }
+    }
+    return url;
+  };
+
+  const currentVideoUrl = viewingVideo ? getCleanVideoUrl(viewingVideo.videoUrl || viewingVideo.link) : "";
 
   return (
     <div id="home-portal-container" className="px-5 pb-24">
@@ -293,8 +292,12 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
             <div className="flex items-center justify-between p-4 bg-slate-900 border-b border-white/5 shadow-md shrink-0">
               <button
                 onClick={() => {
-                   setPlaying(false);
-                   setTimeout(() => setViewingVideo(null), 100);
+                  setIsClosingVideo(true);
+                  setTimeout(() => {
+                    setIsClosingVideo(false);
+                    setViewingVideo(null);
+                    setVideoError(null);
+                  }, 100);
                 }}
                 className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
               >
@@ -311,47 +314,27 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
             <div className="flex-1 overflow-y-auto w-full max-w-5xl mx-auto p-4 md:p-6 lg:p-8 space-y-6">
               <div className="w-full bg-black rounded-3xl overflow-hidden shadow-2xl relative" id="video-player-container">
                 <div className="aspect-video relative group bg-black/90">
-                  <ReactPlayer
-                    ref={playerRef}
-                    url={viewingVideo.videoUrl || viewingVideo.link}
-                    className="absolute top-0 left-0"
-                    width="100%"
-                    height="100%"
-                    controls={true}
-                    playing={playing}
-                    onPlay={() => setPlaying(true)}
-                    onPause={() => setPlaying(false)}
-                    config={{
-                      youtube: {
-                         playerVars: { 
-                           modestbranding: 1,
-                           rel: 0,
-                         }
-                      }
-                    }}
+                  <YouTubeLessonPlayer 
+                    videoUrl={currentVideoUrl}
+                    lessonId={selectedSubject || 'unknown-subject'}
+                    chapterId={selectedChapter || 'unknown-chapter'}
+                    isClosing={isClosingVideo}
                   />
                 </div>
               </div>
 
               {/* Video Bottom Panel */}
               <div className="flex flex-col justify-end md:flex-row items-center gap-4 bg-slate-900 border border-white/5 rounded-2xl p-4 shadow-xl">
-                 <div className="flex gap-4">
-                   <button onClick={handleFullscreen} className="flex flex-col items-center gap-1 group text-slate-400 hover:text-white transition-colors">
-                     <div className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 group-hover:bg-white/10 transition-colors">
-                        <Maximize className="w-5 h-5" />
-                     </div>
-                     <span className="text-[10px] font-sans font-bold">Full Screen</span>
-                   </button>
-                 </div>
-
                  {/* Doubts AI clearance option by Astr AI */}
                  {onOpenAI && (
                    <button 
                      onClick={() => {
-                       // We can auto-trigger the AI and maybe pass the video context
-                       setPlaying(false);
-                       setTimeout(() => setViewingVideo(null), 100);
-                       onOpenAI();
+                       setIsClosingVideo(true);
+                       setTimeout(() => {
+                         setIsClosingVideo(false);
+                         setViewingVideo(null);
+                         onOpenAI();
+                       }, 100);
                      }} 
                      className="relative inline-flex items-center gap-3 px-6 py-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-all group overflow-hidden"
                    >
@@ -699,8 +682,8 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
                                     setShowSubUpgradeModal(true);
                                     return;
                                   }
-                                  setPlaying(true);
                                   setViewingVideo(video);
+                                  setVideoError(null);
                                 }}
                                 className="flex-1 md:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-[10.5px] font-sans font-semibold text-rose-300 hover:bg-rose-500/20 transition-all cursor-pointer outline-none"
                               >

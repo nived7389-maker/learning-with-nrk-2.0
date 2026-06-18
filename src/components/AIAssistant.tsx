@@ -246,7 +246,7 @@ export default function AIAssistant({ student, onBackToHome }: AIAssistantProps)
     setIsSending(true);
 
     try {
-      const endpoint = import.meta.env.PROD 
+      const endpoint = (import.meta as any).env?.PROD 
         ? "/.netlify/functions/chat" 
         : "/api/gemini/chat";
 

@@ -148,6 +148,8 @@ export default function Admin({ onReturn }: AdminProps) {
   >("Computer Science");
   const [libraryPdfs, setLibraryPdfs] = useState<PdfAsset[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
+  const [editingPdf, setEditingPdf] = useState<PdfAsset | null>(null);
+  const [editPdfSubmitting, setEditPdfSubmitting] = useState(false);
 
   // Video Upload Form State
   const [videoTitle, setVideoTitle] = useState("");
@@ -366,6 +368,13 @@ export default function Admin({ onReturn }: AdminProps) {
     }
   };
 
+  const extractYouTubeId = (url: string) => {
+    if (!url) return "";
+    const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[7].length === 11) ? match[7] : url.replace(/[^a-zA-Z0-9_-]/g, "");
+  };
+
   const handleVideoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!videoTitle || !videoLink || !videoChapter || !videoPart) {
@@ -375,6 +384,7 @@ export default function Admin({ onReturn }: AdminProps) {
 
     setVideoSubmitting(true);
     try {
+      const videoIdToSave = extractYouTubeId(videoLink);
       await adminUploadVideo(
         videoTitle,
         videoClass,
@@ -382,7 +392,7 @@ export default function Admin({ onReturn }: AdminProps) {
         videoSubject,
         videoChapter,
         videoPart,
-        videoLink
+        videoIdToSave
       );
 
       setVideoTitle("");
@@ -410,8 +420,10 @@ export default function Admin({ onReturn }: AdminProps) {
          const list = await fetchVideos(libraryVideoClass, libraryVideoStream);
          setLibraryVideos(list);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      alert(e.message || "Failed to delete video.");
+      throw e;
     }
   };
 
@@ -420,6 +432,7 @@ export default function Admin({ onReturn }: AdminProps) {
     if (!editingVideo) return;
     setEditVideoSubmitting(true);
     try {
+      const videoIdToSave = extractYouTubeId(editingVideo.videoUrl || "");
       await adminUpdateVideo(editingVideo.id, {
         title: editingVideo.title,
         class: editingVideo.class,
@@ -427,7 +440,7 @@ export default function Admin({ onReturn }: AdminProps) {
         subject: editingVideo.subject,
         chapter: editingVideo.chapter,
         part: editingVideo.part,
-        videoUrl: editingVideo.videoUrl
+        videoUrl: videoIdToSave
       });
       triggerToast("Video updated successfully!");
       setEditingVideo(null);
@@ -477,40 +490,41 @@ export default function Admin({ onReturn }: AdminProps) {
       await adminDeletePDF(pdfId, fileName);
       triggerToast("Link document deleted from index.");
       refreshAdminData();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      alert(e.message || "Failed to delete PDF.");
+      throw e;
     }
   };
 
-  const handleEditPdf = async (pdf: PdfAsset) => {
-    const newTitle = window.prompt("Enter new title:", pdf.title);
-    if (newTitle === null) return;
+  const handleEditPdf = (pdf: PdfAsset) => {
+    setEditingPdf({ ...pdf });
+  };
 
-    const newLink = window.prompt("Enter new link/URL:", pdf.pdfUrl);
-    if (newLink === null) return;
-
-    if (!newTitle.trim() || !newLink.trim()) {
-      alert("Both title and link must optionally be provided.");
-      return;
-    }
-
+  const handleUpdatePdfSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPdf) return;
+    setEditPdfSubmitting(true);
     try {
-      await adminEditPDF(pdf.id, newTitle.trim(), newLink.trim());
+      await adminEditPDF(editingPdf.id, editingPdf.title, editingPdf.pdfUrl);
       triggerToast("Library document updated successfully.");
 
       // Update local state if we are inside library active tab
       setLibraryPdfs((prev) =>
         prev.map((p) =>
-          p.id === pdf.id
-            ? { ...p, title: newTitle.trim(), pdfUrl: newLink.trim() }
+          p.id === editingPdf.id
+            ? { ...p, title: editingPdf.title, pdfUrl: editingPdf.pdfUrl }
             : p,
         ),
       );
 
+      setEditingPdf(null);
       refreshAdminData();
     } catch (e) {
       console.error(e);
       alert("Failed to edit document.");
+    } finally {
+      setEditPdfSubmitting(false);
     }
   };
 
@@ -1579,11 +1593,11 @@ service cloud.firestore {
                   {/* Video Link */}
                   <div>
                     <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
-                      YouTube Embed Link
+                      YouTube Video URL
                     </label>
                     <input
                       type="url"
-                      placeholder="https://www.youtube.com/embed/..."
+                      placeholder="https://youtu.be/... or https://www.youtube.com/watch?v=..."
                       value={videoLink}
                       onChange={(e) => setVideoLink(e.target.value)}
                       className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-600 outline-none focus:border-indigo-500/50"
@@ -1724,14 +1738,22 @@ service cloud.firestore {
           {/* TAB 4: LIBRARY MANAGER */}
           {activeTab === "library" && (
             <div className="space-y-6">
-              <div className="border-b border-black/5 dark:border-white/5 pb-3">
-                <h2 className="font-sans font-bold text-base text-indigo-300">
-                  Global Library Notes Manager
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Select a section to view all subjects and instantly delete
-                  uploaded classes or documents.
-                </p>
+              <div className="border-b border-black/5 dark:border-white/5 pb-3 flex items-center justify-between">
+                <div>
+                  <h2 className="font-sans font-bold text-base text-indigo-300">
+                    Global Library Notes Manager
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Select a section to view all subjects and instantly delete or edit
+                    uploaded documents.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTab("pdf_upload")}
+                  className="px-4 py-2 bg-indigo-500/10 text-indigo-400 text-xs font-semibold rounded-lg hover:bg-indigo-500/20 transition-colors"
+                >
+                  + Upload Note
+                </button>
               </div>
 
               {/* Filters */}
@@ -1784,47 +1806,68 @@ service cloud.firestore {
                     {libraryPdfs.map((pdf) => (
                       <div
                         key={pdf.id}
-                        className="p-3.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 flex flex-col sm:flex-row items-start sm:items-center justify-between text-left font-sans text-xs gap-3"
+                        className="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-xl overflow-hidden flex flex-col"
                       >
-                        <div className="flex gap-3 w-full sm:w-auto">
-                          <div className="w-10 h-10 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 shrink-0">
-                            <BookOpen className="w-5 h-5" />
+                        {editingPdf?.id === pdf.id ? (
+                          <div className="p-4 space-y-4">
+                            <h4 className="text-xs font-bold text-sky-400">Edit Note Details</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[10px] text-slate-500 font-semibold block mb-1">Title</label>
+                                <input type="text" value={editingPdf.title} onChange={(e) => setEditingPdf({...editingPdf, title: e.target.value})} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none" />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-slate-500 font-semibold block mb-1">PDF Link</label>
+                                <input type="url" value={editingPdf.pdfUrl} onChange={(e) => setEditingPdf({...editingPdf, pdfUrl: e.target.value})} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none" />
+                              </div>
+                            </div>
+                            <div className="flex justify-end gap-2 mt-3">
+                              <button onClick={() => setEditingPdf(null)} className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-500 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">Cancel</button>
+                              <button onClick={handleUpdatePdfSubmit} disabled={editPdfSubmitting} className="px-4 py-2 rounded-lg text-xs font-semibold bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 transition-colors">{editPdfSubmitting ? 'Saving...' : 'Save Changes'}</button>
+                            </div>
                           </div>
-                          <div>
-                            <span className="block text-slate-900 dark:text-white font-bold text-sm">
-                              {pdf.title}
-                            </span>
-                            <span className="text-[10px] text-amber-400 font-bold tracking-wide mt-0.5 block">
-                              {pdf.subject}
-                            </span>
-                            <span className="text-[9px] text-slate-600 dark:text-slate-400 font-mono block mt-0.5">
-                              {new Date(pdf.uploadedAt).toLocaleDateString()}
-                            </span>
+                        ) : (
+                          <div className="p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between text-left font-sans text-xs gap-3">
+                            <div className="flex gap-3 w-full sm:w-auto">
+                              <div className="w-10 h-10 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 shrink-0">
+                                <BookOpen className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <span className="block text-slate-900 dark:text-white font-bold text-sm">
+                                  {pdf.title}
+                                </span>
+                                <span className="text-[10px] text-amber-400 font-bold tracking-wide mt-0.5 block">
+                                  {pdf.subject}
+                                </span>
+                                <span className="text-[9px] text-slate-600 dark:text-slate-400 font-mono block mt-0.5">
+                                  {new Date(pdf.uploadedAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 w-full sm:w-auto justify-end">
+                              <button
+                                onClick={() => handleEditPdf(pdf)}
+                                className="p-2 sm:px-4 sm:py-2 flex items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/20 transition-colors font-semibold"
+                              >
+                                <Pencil className="w-4 h-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Edit</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  handleDeletePdf(pdf.id, pdf.fileName).then(() => {
+                                    setLibraryPdfs((prev) =>
+                                      prev.filter((p) => p.id !== pdf.id),
+                                    );
+                                  });
+                                }}
+                                className="p-2 sm:px-4 sm:py-2 flex items-center justify-center rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition-colors font-semibold"
+                              >
+                                <Trash2 className="w-4 h-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Delete</span>
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex gap-2 w-full sm:w-auto justify-end">
-                          <button
-                            onClick={() => handleEditPdf(pdf)}
-                            className="p-2 sm:px-4 sm:py-2 flex items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/20 transition-colors font-semibold"
-                          >
-                            <Pencil className="w-4 h-4 sm:mr-2" />
-                            <span className="hidden sm:inline">Edit</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              handleDeletePdf(pdf.id, pdf.fileName).then(() => {
-                                // Optimistically remove from view or trigger reload
-                                setLibraryPdfs((prev) =>
-                                  prev.filter((p) => p.id !== pdf.id),
-                                );
-                              });
-                            }}
-                            className="p-2 sm:px-4 sm:py-2 flex items-center justify-center rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition-colors font-semibold"
-                          >
-                            <Trash2 className="w-4 h-4 sm:mr-2" />
-                            <span className="hidden sm:inline">Delete</span>
-                          </button>
-                        </div>
+                        )}
                       </div>
                     ))}
                   </div>
