@@ -865,7 +865,7 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
       )}
 
       {/* Floating AI Button */}
-      {onOpenAI && (!selectedSubject || !selectedSubject.startsWith("Microbit")) && (
+      {onOpenAI && !selectedSubject && (
         <>
           {isWarping && (
             <motion.div

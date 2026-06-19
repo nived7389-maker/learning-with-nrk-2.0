@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Loader2, AlertCircle, RefreshCw, Play, Pause, Volume2, VolumeX, Maximize, Rewind, FastForward, Settings } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw, Play, Pause, Volume2, VolumeX, Maximize, Rewind, FastForward, Settings, RotateCw } from 'lucide-react';
 import { updateWatchProgress, markVideoCompleted } from '../lib/videoTracking';
 
 declare global {
@@ -110,6 +110,40 @@ export default function YouTubeLessonPlayer({
 
   const [completedTriggered, setCompletedTriggered] = useState(false);
   const lastSavedTime = useRef<number>(0);
+
+  // Screen rotation fallback state for portrait phones
+  const [isRotated, setIsRotated] = useState(false);
+  const [isMobileOrPortrait, setIsMobileOrPortrait] = useState(false);
+
+  useEffect(() => {
+    const checkViewport = () => {
+      const isPortrait = window.innerHeight > window.innerWidth;
+      const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      setIsMobileOrPortrait(isPortrait || isMobileDevice);
+
+      // If user physically turns screen to landscape (width >= height), turn off custom CSS rotation
+      if (window.innerWidth >= window.innerHeight) {
+        setIsRotated(false);
+      }
+    };
+
+    checkViewport();
+    window.addEventListener('resize', checkViewport);
+
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setIsRotated(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+
+    return () => {
+      window.removeEventListener('resize', checkViewport);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (!validVideoId) {
@@ -359,10 +393,38 @@ export default function YouTubeLessonPlayer({
     setShowSettings(false);
   };
 
+  const toggleRotation = () => {
+    // If not in fullscreen yet, request fullscreen and rotate automatically
+    if (!document.fullscreenElement && wrapperRef.current) {
+      wrapperRef.current.requestFullscreen()
+        .then(() => {
+          setIsRotated(true);
+          const orientation = screen.orientation as any;
+          if (orientation && typeof orientation.lock === 'function') {
+            orientation.lock('landscape').catch(() => {});
+          }
+        })
+        .catch(err => console.error(err));
+    } else {
+      setIsRotated(!isRotated);
+    }
+  };
+
   const toggleFullscreen = () => {
     if (!wrapperRef.current) return;
     if (!document.fullscreenElement) {
-      wrapperRef.current.requestFullscreen().catch(err => console.error(err));
+      wrapperRef.current.requestFullscreen()
+        .then(() => {
+          // If screen height is greater than width, auto-trigger rotated container
+          if (window.innerHeight > window.innerWidth) {
+            setIsRotated(true);
+          }
+          const orientation = screen.orientation as any;
+          if (orientation && typeof orientation.lock === 'function') {
+            orientation.lock('landscape').catch(() => {});
+          }
+        })
+        .catch(err => console.error(err));
     } else {
       document.exitFullscreen();
     }
@@ -384,148 +446,180 @@ export default function YouTubeLessonPlayer({
       onTouchStart={handleMouseMove}
       onMouseLeave={() => isPlaying && setShowControls(false)}
       onContextMenu={handleContextMenu}
-      className={`relative w-full aspect-video bg-black rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 group select-none ${document.fullscreenElement ? 'rounded-none' : ''}`}
+      className={`relative w-full aspect-video bg-black rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 group select-none ${
+        document.fullscreenElement ? 'rounded-none w-screen h-screen' : ''
+      }`}
     >
-      {!isReady && !hasError && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-30 transition-opacity duration-300">
-          <Loader2 className="w-10 h-10 text-cyan-500 animate-spin mb-4" />
-          <p className="text-slate-400 font-medium">Getting player ready...</p>
-        </div>
-      )}
-
-      {hasError && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-30 p-6 text-center">
-          <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4">
-            <AlertCircle className="w-8 h-8 text-red-500" />
-          </div>
-          <h3 className="text-xl font-bold text-white mb-2">Video Unavailable</h3>
-          <p className="text-slate-400 mb-6 max-w-md">{errorMessage}</p>
-        </div>
-      )}
-
-      {/* Frame Container - Pointer events none to block all interactions with yt elements */}
-      <div 
-        ref={playerContainerRef} 
-        className="absolute inset-0 w-full h-full [&>iframe]:w-full [&>iframe]:h-full [&>iframe]:pointer-events-none border-none outline-none scale-[1.05]"
-      />
-
-      {/* Transparent Overlay to capture clicks (play/pause) and prevent youtube redirects */}
-      <div 
-        className="absolute inset-0 z-10 cursor-pointer"
-        onClick={togglePlay}
-      />
-
-      {/* Custom Controls Bar */}
-      <div 
-        className={`absolute bottom-0 left-0 right-0 z-20 px-4 pt-16 pb-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent transition-opacity duration-300 ${
-          showControls || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'
+      <div
+        className={`w-full h-full relative transition-all duration-300 ${
+          isRotated && document.fullscreenElement
+            ? 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90 origin-center z-40'
+            : ''
         }`}
-        onClick={(e) => e.stopPropagation()} // don't trigger wrapper play/pause
+        style={
+          isRotated && document.fullscreenElement
+            ? {
+                width: '100vh',
+                height: '100vw',
+              }
+            : {
+                width: '100%',
+                height: '100%',
+              }
+        }
       >
-        {/* Progress Bar */}
-        <div className="flex items-center gap-2 w-full mb-3 group/progress">
-          <span className="text-xs text-white/80 font-medium font-mono min-w-[40px] text-right">{formatTime(safeCurrentTime)}</span>
-          <div className="relative flex-1 h-2 flex items-center">
-            <input 
-              type="range"
-              min={0}
-              max={safeDuration || 100}
-              value={safeCurrentTime}
-              onChange={handleSeek}
-              className="absolute z-10 w-full opacity-0 cursor-pointer w-full h-full"
-            />
-            <div className="absolute inset-0 bg-white/20 rounded-full overflow-hidden">
-              <div 
-                className="absolute top-0 left-0 bottom-0 bg-cyan-500 transition-all duration-100 rounded-full"
-                style={{ width: `${safeDuration > 0 ? (safeCurrentTime / safeDuration) * 100 : 0}%` }}
-              />
-            </div>
+        {!isReady && !hasError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-30 transition-opacity duration-300">
+            <Loader2 className="w-10 h-10 text-cyan-500 animate-spin mb-4" />
+            <p className="text-slate-400 font-medium">Getting player ready...</p>
           </div>
-          <span className="text-xs text-white/80 font-medium font-mono min-w-[40px]">{formatTime(safeDuration)}</span>
-        </div>
+        )}
 
-        {/* Buttons Row */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button onClick={togglePlay} className="text-white hover:text-cyan-400 transition-colors focus:outline-none">
-              {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current" />}
-            </button>
-            <button onClick={() => skip(-10)} className="text-white hover:text-cyan-400 transition-colors focus:outline-none" title="Rewind 10s">
-              <Rewind className="w-5 h-5 fill-current" />
-            </button>
-            <button onClick={() => skip(10)} className="text-white hover:text-cyan-400 transition-colors focus:outline-none" title="Forward 10s">
-              <FastForward className="w-5 h-5 fill-current" />
-            </button>
+        {hasError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-30 p-6 text-center">
+            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4">
+              <AlertCircle className="w-8 h-8 text-red-500" />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">Video Unavailable</h3>
+            <p className="text-slate-400 mb-6 max-w-md">{errorMessage}</p>
+          </div>
+        )}
 
-            {/* Volume */}
-            <div className="flex items-center gap-2 group/volume mx-2">
-              <button onClick={toggleMute} className="text-white hover:text-cyan-400 transition-colors focus:outline-none w-6 flex justify-center">
-                {isMuted || safeVolume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-              </button>
+        {/* Frame Container - Pointer events none to block all interactions with yt elements */}
+        <div 
+          ref={playerContainerRef} 
+          className="absolute inset-0 w-full h-full [&>iframe]:w-full [&>iframe]:h-full [&>iframe]:pointer-events-none border-none outline-none scale-[1.05]"
+        />
+
+        {/* Transparent Overlay to capture clicks (play/pause) and prevent youtube redirects */}
+        <div 
+          className="absolute inset-0 z-10 cursor-pointer"
+          onClick={togglePlay}
+        />
+
+        {/* Custom Controls Bar */}
+        <div 
+          className={`absolute bottom-0 left-0 right-0 z-20 px-4 pt-16 pb-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent transition-opacity duration-300 ${
+            showControls || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
+          onClick={(e) => e.stopPropagation()} // don't trigger wrapper play/pause
+        >
+          {/* Progress Bar */}
+          <div className="flex items-center gap-2 w-full mb-3 group/progress">
+            <span className="text-xs text-white/80 font-medium font-mono min-w-[40px] text-right">{formatTime(safeCurrentTime)}</span>
+            <div className="relative flex-1 h-2 flex items-center">
               <input 
                 type="range"
                 min={0}
-                max={100}
-                value={isMuted ? 0 : safeVolume}
-                onChange={handleVolumeChange}
-                className="w-0 opacity-0 group-hover/volume:w-20 group-hover/volume:opacity-100 transition-all duration-300 h-1 bg-white/30 rounded-full appearance-none outline-none overflow-hidden cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-0"
-                style={{ boxShadow: `inset ${(isMuted ? 0 : safeVolume)}px 0 0 white` }}
+                max={safeDuration || 100}
+                value={safeCurrentTime}
+                onChange={handleSeek}
+                className="absolute z-10 w-full opacity-0 cursor-pointer w-full h-full"
               />
+              <div className="absolute inset-0 bg-white/20 rounded-full overflow-hidden">
+                <div 
+                  className="absolute top-0 left-0 bottom-0 bg-cyan-500 transition-all duration-100 rounded-full"
+                  style={{ width: `${safeDuration > 0 ? (safeCurrentTime / safeDuration) * 100 : 0}%` }}
+                />
+              </div>
             </div>
+            <span className="text-xs text-white/80 font-medium font-mono min-w-[40px]">{formatTime(safeDuration)}</span>
           </div>
 
-          <div className="flex items-center gap-4 relative">
-            <button 
-              onClick={() => setShowSettings(!showSettings)} 
-              className={`text-white hover:text-cyan-400 transition-colors focus:outline-none ${showSettings ? 'rotate-90 text-cyan-400' : ''} duration-300`}
-            >
-              <Settings className="w-5 h-5" />
-            </button>
-            
-            <button onClick={toggleFullscreen} className="text-white hover:text-cyan-400 transition-colors focus:outline-none">
-              <Maximize className="w-5 h-5" />
-            </button>
+          {/* Buttons Row */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button onClick={togglePlay} className="text-white hover:text-cyan-400 transition-colors focus:outline-none animate-none">
+                {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current" />}
+              </button>
+              <button onClick={() => skip(-10)} className="text-white hover:text-cyan-400 transition-colors focus:outline-none" title="Rewind 10s">
+                <Rewind className="w-5 h-5 fill-current" />
+              </button>
+              <button onClick={() => skip(10)} className="text-white hover:text-cyan-400 transition-colors focus:outline-none" title="Forward 10s">
+                <FastForward className="w-5 h-5 fill-current" />
+              </button>
 
-            {/* Settings Dialog */}
-            {showSettings && (
-              <div className="absolute bottom-12 right-0 bg-slate-900/95 backdrop-blur-sm border border-white/10 rounded-xl p-3 shadow-2xl min-w-[160px] flex gap-4">
-                <div>
-                  <div className="text-[10px] text-slate-400 uppercase font-semibold mb-2 px-2">Speed</div>
-                  {[0.5, 0.75, 1, 1.25, 1.5, 2].map(rate => (
-                    <button 
-                      key={rate}
-                      onClick={() => changePlaybackRate(rate)}
-                      className={`block w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${playbackRate === rate ? 'bg-cyan-500/20 text-cyan-400 font-semibold' : 'text-slate-300 hover:bg-white/5'}`}
-                    >
-                      {rate === 1 ? 'Normal' : `${rate}x`}
-                    </button>
-                  ))}
-                </div>
-                {qualityOptions.length > 0 && (
-                  <div>
-                    <div className="text-[10px] text-slate-400 uppercase font-semibold mb-2 px-2">Quality</div>
-                    <button 
-                      onClick={() => changeQuality('auto')}
-                      className={`block w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${currentQuality === 'auto' ? 'bg-cyan-500/20 text-cyan-400 font-semibold' : 'text-slate-300 hover:bg-white/5'}`}
-                    >
-                      Auto
-                    </button>
-                    {qualityOptions.map((q) => {
-                      if (q === 'auto') return null;
-                      return (
-                        <button 
-                          key={q}
-                          onClick={() => changeQuality(q)}
-                          className={`block w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${currentQuality === q ? 'bg-cyan-500/20 text-cyan-400 font-semibold' : 'text-slate-300 hover:bg-white/5'}`}
-                        >
-                          {q.replace('hd', '').replace('small', '240 ').replace('medium', '360 ').replace('large', '480 ').toUpperCase()}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+              {/* Volume */}
+              <div className="flex items-center gap-2 group/volume mx-2">
+                <button onClick={toggleMute} className="text-white hover:text-cyan-400 transition-colors focus:outline-none w-6 flex justify-center">
+                  {isMuted || safeVolume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                </button>
+                <input 
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={isMuted ? 0 : safeVolume}
+                  onChange={handleVolumeChange}
+                  className="w-0 opacity-0 group-hover/volume:w-20 group-hover/volume:opacity-100 transition-all duration-300 h-1 bg-white/30 rounded-full appearance-none outline-none overflow-hidden cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-0"
+                  style={{ boxShadow: `inset ${(isMuted ? 0 : safeVolume)}px 0 0 white` }}
+                />
               </div>
-            )}
+            </div>
+
+            <div className="flex items-center gap-4 relative animate-none">
+              <button 
+                onClick={() => setShowSettings(!showSettings)} 
+                className={`text-white hover:text-cyan-400 transition-colors focus:outline-none ${showSettings ? 'rotate-90 text-cyan-400' : ''} duration-300`}
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+
+              {/* Portrait/Landscape Rotation Trigger */}
+              {(isMobileOrPortrait || document.fullscreenElement) && (
+                <button 
+                  onClick={toggleRotation} 
+                  className="text-white hover:text-cyan-400 hover:bg-white/10 p-1.5 rounded-lg transition-all duration-200 focus:outline-none"
+                  title={isRotated ? "Switch to Vertical View" : "Rotate to Landscape View"}
+                >
+                  <RotateCw className={`w-5 h-5 transition-transform duration-300 ${isRotated ? 'rotate-90 text-cyan-400' : ''}`} />
+                </button>
+              )}
+              
+              <button onClick={toggleFullscreen} className="text-white hover:text-cyan-400 transition-colors focus:outline-none">
+                <Maximize className="w-5 h-5" />
+              </button>
+
+              {/* Settings Dialog */}
+              {showSettings && (
+                <div className="absolute bottom-12 right-0 bg-slate-900/95 backdrop-blur-sm border border-white/10 rounded-xl p-3 shadow-2xl min-w-[160px] flex gap-4">
+                  <div>
+                    <div className="text-[10px] text-slate-400 uppercase font-semibold mb-2 px-2">Speed</div>
+                    {[0.5, 0.75, 1, 1.25, 1.5, 2].map(rate => (
+                      <button 
+                        key={rate}
+                        onClick={() => changePlaybackRate(rate)}
+                        className={`block w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${playbackRate === rate ? 'bg-cyan-500/20 text-cyan-400 font-semibold' : 'text-slate-300 hover:bg-white/5'}`}
+                      >
+                        {rate === 1 ? 'Normal' : `${rate}x`}
+                      </button>
+                    ))}
+                  </div>
+                  {qualityOptions.length > 0 && (
+                    <div>
+                      <div className="text-[10px] text-slate-400 uppercase font-semibold mb-2 px-2">Quality</div>
+                      <button 
+                        onClick={() => changeQuality('auto')}
+                        className={`block w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${currentQuality === 'auto' ? 'bg-cyan-500/20 text-cyan-400 font-semibold' : 'text-slate-300 hover:bg-white/5'}`}
+                      >
+                        Auto
+                      </button>
+                      {qualityOptions.map((q) => {
+                        if (q === 'auto') return null;
+                        return (
+                          <button 
+                            key={q}
+                            onClick={() => changeQuality(q)}
+                            className={`block w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${currentQuality === q ? 'bg-cyan-500/20 text-cyan-400 font-semibold' : 'text-slate-300 hover:bg-white/5'}`}
+                          >
+                            {q.replace('hd', '').replace('small', '240 ').replace('medium', '360 ').replace('large', '480 ').toUpperCase()}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
