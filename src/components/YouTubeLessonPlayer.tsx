@@ -497,6 +497,46 @@ export default function YouTubeLessonPlayer({
           onClick={togglePlay}
         />
 
+        {/* Center UI Controls Overlay */}
+        <div 
+          className={`absolute inset-0 flex items-center justify-center z-[25] pointer-events-none transition-opacity duration-300 ${
+            showControls || !isPlaying ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          <div className="flex items-center gap-6 sm:gap-10 pointer-events-auto">
+            {/* Skip Back button */}
+            <button 
+              onClick={(e) => { e.stopPropagation(); skip(-10); }}
+              className="w-12 h-12 sm:w-16 sm:h-16 bg-black/60 hover:bg-black/85 backdrop-blur-sm border border-white/10 rounded-full flex items-center justify-center text-white transition-all transform active:scale-90 hover:scale-110 shadow-lg cursor-pointer"
+              title="Rewind 10 seconds"
+            >
+              <Rewind className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
+            </button>
+
+            {/* Play/Pause button */}
+            <button 
+              onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+              className="w-16 h-16 sm:w-20 sm:h-20 bg-cyan-500 hover:bg-cyan-400 border border-white/25 rounded-full flex items-center justify-center text-white shadow-xl shadow-cyan-500/25 transition-all transform active:scale-90 hover:scale-115 cursor-pointer"
+              title={isPlaying ? "Pause" : "Play"}
+            >
+              {isPlaying ? (
+                <Pause className="w-6 h-6 sm:w-8 sm:h-8 fill-current" />
+              ) : (
+                <Play className="w-6 h-6 sm:w-8 sm:h-8 fill-current ml-1" />
+              )}
+            </button>
+
+            {/* Skip Forward button */}
+            <button 
+              onClick={(e) => { e.stopPropagation(); skip(10); }}
+              className="w-12 h-12 sm:w-16 sm:h-16 bg-black/60 hover:bg-black/85 backdrop-blur-sm border border-white/10 rounded-full flex items-center justify-center text-white transition-all transform active:scale-90 hover:scale-110 shadow-lg cursor-pointer"
+              title="Forward 10 seconds"
+            >
+              <FastForward className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
+            </button>
+          </div>
+        </div>
+
         {/* Custom Controls Bar */}
         <div 
           className={`absolute bottom-0 left-0 right-0 z-20 px-4 pt-16 pb-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent transition-opacity duration-300 ${

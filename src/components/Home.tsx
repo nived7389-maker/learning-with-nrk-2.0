@@ -106,7 +106,11 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
         history: videoChatMessages.map(m => ({ role: m.role, text: m.text }))
       };
 
-      const response = await fetch("/api/gemini/chat", {
+      const endpoint = (import.meta as any).env?.PROD 
+        ? "/.netlify/functions/chat" 
+        : "/api/gemini/chat";
+
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
