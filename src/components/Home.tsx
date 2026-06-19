@@ -6,7 +6,7 @@ import {
   Download, Eye, AlertCircle, Sparkles, Search, 
   ArrowLeft, FileText, CheckCircle2, ChevronRight, HelpCircle,
   Cpu, Dna, BookA, Languages, PenTool, Pi, Phone, Video,
-  Play, Pause, FastForward, Rewind, Maximize, Brain
+  Play, Pause, FastForward, Rewind, Maximize, Brain, Send
 } from "lucide-react";
 import { Student, PdfAsset, BannerAsset, Subscription } from "../types";
 import { fetchBanners, fetchPDFs, listenToUserSubscription, listenAppConfig, fetchMicrobits, fetchVideos } from "../firebase";
@@ -50,6 +50,84 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
   const [viewingVideo, setViewingVideo] = useState<any | null>(null);
   const [isClosingVideo, setIsClosingVideo] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
+
+  // Embedded video doubt chat states
+  const [videoChatMessages, setVideoChatMessages] = useState<{ role: "user" | "model"; text: string }[]>([]);
+  const [videoChatInput, setVideoChatInput] = useState("");
+  const [isVideoChatSending, setIsVideoChatSending] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Initialize and auto-scrolled chat whenever viewingVideo changes
+  useEffect(() => {
+    if (viewingVideo) {
+      setVideoChatMessages([
+        {
+          role: "model",
+          text: `Hi **${student.name ? student.name.split(" ")[0] : "Student"}**! I am **Astr AI**, your personal doubt clearance assistant. \n\nI have the full context of **"${viewingVideo.title}"** (${viewingVideo.subject || ""}). \n\nWhat would you like to ask or clarify from this class? Press any of the helpers below or write your doubts in Malayalam/English! 👇`
+        }
+      ]);
+      setVideoChatInput("");
+      setIsVideoChatSending(false);
+
+      // Force scroll to top so the video player starts at the top of the view
+      window.scrollTo({ top: 0, behavior: "instant" as any });
+      const mainScroll = document.querySelector("main");
+      if (mainScroll) {
+        mainScroll.scrollTo({ top: 0, behavior: "instant" as any });
+      }
+      const vaultScroll = document.getElementById("subject-inner-vault");
+      if (vaultScroll) {
+        vaultScroll.scrollTo({ top: 0, behavior: "instant" as any });
+      }
+    } else {
+      setVideoChatMessages([]);
+    }
+  }, [viewingVideo, student.name]);
+
+  // Scroll to bottom when new message arrives (only when there are interactive user/model turns)
+  useEffect(() => {
+    if (videoChatMessages.length > 1) {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [videoChatMessages]);
+
+  const sendVideoChatDoubt = async (textToSend: string) => {
+    if (!textToSend.trim() || isVideoChatSending) return;
+
+    const userMsg = { role: "user" as const, text: textToSend.trim() };
+    const updatedMessages = [...videoChatMessages, userMsg];
+    setVideoChatMessages(updatedMessages);
+    setVideoChatInput("");
+    setIsVideoChatSending(true);
+
+    try {
+      const payload = {
+        prompt: `The user is watching the Kerala Board syllabus video lesson:\nVideo Title: "${viewingVideo?.title || ''}"\nSubject: "${viewingVideo?.subject || ''}"\nChapter: "${viewingVideo?.chapter || ''}"\nPart: "${viewingVideo?.part || ''}"\n\nUser Question: ${textToSend.trim()}`,
+        history: videoChatMessages.map(m => ({ role: m.role, text: m.text }))
+      };
+
+      const response = await fetch("/api/gemini/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to contact doubt solver.");
+      }
+
+      const data = await response.json();
+      setVideoChatMessages([...updatedMessages, { role: "model", text: data.text }]);
+    } catch (e: any) {
+      console.error(e);
+      setVideoChatMessages([...updatedMessages, { 
+        role: "model", 
+        text: "Could not fetch dynamic hint from Astr AI. Please click submit again." 
+      }]);
+    } finally {
+      setIsVideoChatSending(false);
+    }
+  };
 
   // If subject is deselected from outside, reset chapter
   useEffect(() => {
@@ -279,78 +357,7 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
           </motion.div>
         )}
 
-        {/* FULLSCREEN VIDEO VIEW MODAL */}
-        {viewingVideo && (
-          <motion.div
-            id="video-view-modal"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex flex-col bg-slate-950 text-white"
-          >
-            {/* Nav area */}
-            <div className="flex items-center justify-between p-4 bg-slate-900 border-b border-white/5 shadow-md shrink-0">
-              <button
-                onClick={() => {
-                  setIsClosingVideo(true);
-                  setTimeout(() => {
-                    setIsClosingVideo(false);
-                    setViewingVideo(null);
-                    setVideoError(null);
-                  }, 100);
-                }}
-                className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Return to chapter</span>
-              </button>
-              <h3 className="font-sans font-semibold text-xs truncate max-w-[140px] md:max-w-xs">{viewingVideo.title}</h3>
-              <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
-                 <Video className="w-4 h-4 text-rose-400" />
-              </div>
-            </div>
 
-            {/* Video Player */}
-            <div className="flex-1 overflow-y-auto w-full max-w-5xl mx-auto p-4 md:p-6 lg:p-8 space-y-6">
-              <div className="w-full bg-black rounded-3xl overflow-hidden shadow-2xl relative" id="video-player-container">
-                <div className="aspect-video relative group bg-black/90">
-                  <YouTubeLessonPlayer 
-                    videoUrl={currentVideoUrl}
-                    lessonId={selectedSubject || 'unknown-subject'}
-                    chapterId={selectedChapter || 'unknown-chapter'}
-                    isClosing={isClosingVideo}
-                  />
-                </div>
-              </div>
-
-              {/* Video Bottom Panel */}
-              <div className="flex flex-col justify-end md:flex-row items-center gap-4 bg-slate-900 border border-white/5 rounded-2xl p-4 shadow-xl">
-                 {/* Doubts AI clearance option by Astr AI */}
-                 {onOpenAI && (
-                   <button 
-                     onClick={() => {
-                       setIsClosingVideo(true);
-                       setTimeout(() => {
-                         setIsClosingVideo(false);
-                         setViewingVideo(null);
-                         onOpenAI();
-                       }, 100);
-                     }} 
-                     className="relative inline-flex items-center gap-3 px-6 py-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-all group overflow-hidden"
-                   >
-                     <div className="absolute inset-0 bg-cyan-400/10 w-0 group-hover:w-full transition-all duration-500 ease-out z-0" />
-                     <Brain className="w-5 h-5 relative z-10" />
-                     <div className="text-left relative z-10">
-                       <span className="block text-[10px] uppercase font-bold tracking-widest text-cyan-300">Astr AI</span>
-                       <span className="block text-xs font-semibold text-white mt-0.5">Clear Doubts in Malayalam/English</span>
-                     </div>
-                     <Sparkles className="w-4 h-4 text-cyan-300 ml-2 relative z-10 opacity-50 group-hover:opacity-100 group-hover:rotate-12 transition-all" />
-                   </button>
-                 )}
-              </div>
-            </div>
-          </motion.div>
-        )}
       </AnimatePresence>
 
       {!selectedSubject ? (
@@ -485,36 +492,190 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
           initial={{ opacity: 0, scale: 0.98, filter: "blur(10px)" }}
           animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
           transition={{ duration: 0.5, ease: "easeOut" }}
-          className="space-y-5 pt-3 text-[#f2f2f2]"
+          className="space-y-5 pt-3 text-slate-800 dark:text-[#f2f2f2]"
         >
-          {/* Internal Portal Directory Hero Header */}
-          <div className="flex items-center gap-3">
-            <button
-              id="back-to-home-from-sub-btn"
-              onClick={() => {
-                if (selectedChapter) {
-                  setSelectedChapter(null);
-                } else {
-                  onBackToHome();
-                }
-              }}
-              className="w-10 h-10 rounded-full bg-black/5 dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:bg-black/5 dark:bg-white/10 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors cursor-pointer outline-none"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-mono text-indigo-400 uppercase tracking-widest">{student.class} Science</span>
-                <span className="text-slate-500 font-mono text-[9px] uppercase">&bull; {selectedSubject}</span>
-                {selectedChapter && (
-                   <span className="text-slate-500 font-mono text-[9px] uppercase">&bull; {selectedChapter}</span>
-                )}
+          {viewingVideo ? (
+            <div className="space-y-6">
+              {/* Back Button to get out of currently playing video and return to parts list */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setIsClosingVideo(true);
+                    setTimeout(() => {
+                      setIsClosingVideo(false);
+                      setViewingVideo(null);
+                      setVideoError(null);
+                    }, 100);
+                  }}
+                  className="w-10 h-10 rounded-full bg-black/5 dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors cursor-pointer outline-none"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <div>
+                  <h2 id="video-lesson-title" className="font-sans font-extrabold text-lg text-slate-900 dark:text-white leading-none">
+                    Now Studying: {viewingVideo.title}
+                  </h2>
+                </div>
               </div>
-              <h2 id="subject-inner-title" className="font-sans font-extrabold text-xl text-slate-900 dark:text-white leading-none">
-                {selectedChapter ? selectedChapter : (selectedSubject.startsWith("Microbit") ? selectedSubject : `${selectedSubject} Chapters`)}
-              </h2>
+
+              {/* 1. Video Player at the Top */}
+              <div className="w-full bg-black rounded-3xl overflow-hidden shadow-2xl relative" id="video-player-container-integrated">
+                <div className="aspect-video relative group bg-black/90">
+                  <YouTubeLessonPlayer 
+                    videoUrl={currentVideoUrl}
+                    lessonId={selectedSubject || 'unknown-subject'}
+                    chapterId={selectedChapter || 'unknown-chapter'}
+                    isClosing={isClosingVideo}
+                  />
+                </div>
+              </div>
+
+              {/* 2. Video Info Card */}
+              <div className="bg-white/70 dark:bg-slate-900/80 border border-slate-200 dark:border-white/5 rounded-2xl p-5 shadow-xl">
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[10.5px] font-bold text-indigo-600 dark:text-indigo-400">
+                    Part {viewingVideo.part || 1}
+                  </span>
+                </div>
+                <h2 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white tracking-tight leading-snug">{viewingVideo.title}</h2>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+                  Now playing dynamic video session. Scroll down further to ask doubts, summarize content, or practice exam questions directly with <strong>Astr AI Doubt Clarification</strong> below.
+                </p>
+              </div>
+
+              {/* 3. Divider scroll indicator */}
+              <div className="flex items-center justify-center py-2 text-slate-500 gap-2">
+                <div className="h-[1px] bg-slate-200 dark:bg-white/5 flex-1" />
+                <span className="text-[10px] font-mono tracking-widest uppercase text-slate-550 dark:text-slate-400">⬇️ Scroll down for AI Doubt Clearance</span>
+                <div className="h-[1px] bg-slate-200 dark:bg-white/5 flex-1" />
+              </div>
+
+              {/* 4. Scroll Down to Doubts AI Box */}
+              <div className="w-full flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-3xl h-[480px] overflow-hidden shadow-2xl relative">
+                {/* Chat Header */}
+                <div className="p-4 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-white/5 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
+                      <Brain className="w-4 h-4 text-cyan-550 dark:text-cyan-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-sans font-bold text-xs text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                        Ask Question with AI
+                      </h3>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">Two-in-One Live Doubt Clearance</p>
+                    </div>
+                  </div>
+                  <span className="bg-cyan-500/10 text-cyan-500 dark:text-cyan-400 border border-cyan-500/20 text-[9px] px-2 py-0.5 rounded-full font-mono">
+                    ONLINE
+                  </span>
+                </div>
+
+                {/* Messages Panel */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-white/10 scrollbar-track-transparent">
+                  {videoChatMessages.map((msg, idx) => (
+                    <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] rounded-2xl p-3.5 ${msg.role === 'user' ? 'bg-cyan-500/10 border border-cyan-500/20 text-slate-800 dark:text-cyan-53 rounded-tr-sm' : 'bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100 rounded-tl-sm'}`}>
+                        {msg.role === 'model' && (
+                          <div className="flex items-center gap-1.5 mb-1.5 border-b border-slate-200 dark:border-white/5 pb-1.5">
+                            <BotLogo className="w-4 h-4 text-cyan-550 dark:text-cyan-400" />
+                            <span className="text-[10px] font-bold text-cyan-500 dark:text-cyan-400 uppercase tracking-wider">ASTR AI</span>
+                          </div>
+                        )}
+                        <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {isVideoChatSending && (
+                    <div className="flex justify-start">
+                      <div className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl rounded-tl-sm p-3 w-14 flex items-center justify-center gap-1">
+                        <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></div>
+                        <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                        <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                {/* Suggestions Grid */}
+                <div className="p-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-white/5 space-y-1.5 select-none shrink-0">
+                  <p className="text-[9px] text-slate-550 dark:text-slate-300 font-bold uppercase tracking-wider mb-1 px-1">Quick Helper Prompts:</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button 
+                      onClick={() => sendVideoChatDoubt("Can you explain this topic in simple terms?")}
+                      className="text-left p-2 rounded-lg bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 text-[10px] text-slate-655 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white transition-colors border border-slate-200 dark:border-white/5 truncate cursor-pointer shadow-sm"
+                    >
+                      💡 Simple Explanation
+                    </button>
+                    <button 
+                      onClick={() => sendVideoChatDoubt("Malayalam-il clear aayi paranju tharaamo?")}
+                      className="text-left p-2 rounded-lg bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 text-[10px] text-slate-655 dark:text-slate-300 hover:text-slate-955 dark:hover:text-white transition-colors border border-slate-200 dark:border-white/5 truncate cursor-pointer shadow-sm"
+                    >
+                      🗣️ Explain in Malayalam
+                    </button>
+                    <button 
+                      onClick={() => sendVideoChatDoubt("What are the most important formulas and points to remember?")}
+                      className="text-left p-2 rounded-lg bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 text-[10px] text-slate-655 dark:text-slate-300 hover:text-slate-955 dark:hover:text-white transition-colors border border-slate-200 dark:border-white/5 truncate cursor-pointer shadow-sm"
+                    >
+                      📝 Key Exam Points
+                    </button>
+                    <button 
+                      onClick={() => sendVideoChatDoubt("Generate 3 multiple choice questions for practice on this lesson with answer keys.")}
+                      className="text-left p-2 rounded-lg bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 text-[10px] text-slate-655 dark:text-slate-300 hover:text-slate-955 dark:hover:text-white transition-colors border border-slate-200 dark:border-white/5 truncate cursor-pointer shadow-sm"
+                    >
+                      ✍️ Practice Questions
+                    </button>
+                  </div>
+                </div>
+
+                {/* Input Area */}
+                <form 
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    sendVideoChatDoubt(videoChatInput);
+                  }}
+                  className="p-3 bg-slate-50/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-white/5 flex gap-2 items-center text-slate-900 dark:text-white"
+                >
+                  <input 
+                    type="text"
+                    value={videoChatInput}
+                    onChange={(e) => setVideoChatInput(e.target.value)}
+                    placeholder="Ask doubts about this lesson..."
+                    className="flex-1 h-9 bg-white dark:bg-white/10 border border-slate-250 dark:border-white/10 rounded-xl px-3 text-xs text-slate-900 dark:text-white placeholder-slate-400 outline-none transition-all focus:border-cyan-500 animate-none"
+                  />
+                  <button 
+                    type="submit"
+                    disabled={isVideoChatSending || !videoChatInput.trim()}
+                    className="w-9 h-9 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 disabled:hover:bg-cyan-500 flex items-center justify-center text-slate-950 transition-colors cursor-pointer"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </form>
+              </div>
             </div>
-          </div>
+          ) : (
+            <>
+              {/* Internal Portal Directory Hero Header */}
+              <div className="flex items-center gap-3">
+                <button
+                  id="back-to-home-from-sub-btn"
+                  onClick={() => {
+                    if (selectedChapter) {
+                      setSelectedChapter(null);
+                    } else {
+                      onBackToHome();
+                    }
+                  }}
+                  className="w-10 h-10 rounded-full bg-black/5 dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:bg-black/5 dark:bg-white/10 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors cursor-pointer outline-none"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <div>
+                  <h2 id="subject-inner-title" className="font-sans font-extrabold text-xl text-slate-900 dark:text-white leading-none">
+                    {selectedChapter ? selectedChapter : (selectedSubject.startsWith("Microbit") ? selectedSubject : `${selectedSubject} Chapters`)}
+                  </h2>
+                </div>
+              </div>
 
           {/* Search block */}
           {(!selectedSubject.startsWith("Microbit") && !selectedChapter) ? (
@@ -698,11 +859,13 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
                 )}
              </div>
           )}
+            </>
+          )}
         </motion.div>
       )}
 
       {/* Floating AI Button */}
-      {onOpenAI && (
+      {onOpenAI && (!selectedSubject || !selectedSubject.startsWith("Microbit")) && (
         <>
           {isWarping && (
             <motion.div

@@ -228,6 +228,33 @@ export default function Settings({ student, onLogout, onProfileUpdate }: Setting
                 </div>
               )}
 
+              {activeTabModal === "Student Instructions" && (
+                <div className="text-left space-y-4">
+                  <h3 className="font-sans font-bold text-lg text-indigo-500 border-b border-black/5 dark:border-white/5 pb-2 flex items-center gap-1.5">
+                    <HelpCircle className="w-5 h-5 text-indigo-500" />
+                    <span>Student Instructions</span>
+                  </h3>
+                  <div className="space-y-4 text-xs font-sans text-slate-700 dark:text-slate-300">
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-slate-900 dark:text-white">1. Two-in-One Live Doubt Clearance</h4>
+                      <p className="leading-relaxed">Under any playing video lesson, scroll down to access Astr AI. Ask complex doubts, translate explanations to Malayalam, summarize main points, or generate custom multiple choice questions instantly.</p>
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-slate-900 dark:text-white">2. Study Vault & Textbooks</h4>
+                      <p className="leading-relaxed">Explore chapters lists, select PDF notes, or view curriculum guides for Physics, Chemistry, Biology, and Computer Science streams.</p>
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-slate-900 dark:text-white">3. Premium Admission Access</h4>
+                      <p className="leading-relaxed">Only verified and subscribed students have full database notes clearance. If your profile status is pending, contact HSE Admission office via Helpdesk.</p>
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-slate-900 dark:text-white">4. Support & Offline Assistance</h4>
+                      <p className="leading-relaxed">Call 8848198680 anytime for enrollment renewals, payment approvals, or technical assistance with the application.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               </div>
             </motion.div>
           </motion.div>
@@ -390,6 +417,21 @@ export default function Settings({ student, onLogout, onProfileUpdate }: Setting
                 <CreditCard className="w-4 h-4" />
               </div>
               <span className="font-sans font-semibold text-xs text-slate-900 dark:text-slate-200">Subscriptions</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-500" />
+          </button>
+
+          {/* Item 3: Student Instructions */}
+          <button
+            id="cell-student-instructions-btn"
+            onClick={() => setActiveTabModal("Student Instructions")}
+            className="flex items-center justify-between w-full py-4 px-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors outline-none cursor-pointer"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                <HelpCircle className="w-4 h-4" />
+              </div>
+              <span className="font-sans font-semibold text-xs text-slate-900 dark:text-slate-200">Student Instructions</span>
             </div>
             <ChevronRight className="w-4 h-4 text-slate-500" />
           </button>

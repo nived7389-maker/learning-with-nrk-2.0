@@ -53,11 +53,20 @@ export let storage: any = null;
 const useLocalMock = false;
 
 function getLocalData<T>(key: string, defaultValue: T): T {
-  return defaultValue;
+  try {
+    const raw = localStorage.getItem(`brf_mock_${key}`);
+    return raw ? JSON.parse(raw) : defaultValue;
+  } catch (e) {
+    return defaultValue;
+  }
 }
 
 function setLocalData<T>(key: string, value: T): void {
-  // no-op
+  try {
+    localStorage.setItem(`brf_mock_${key}`, JSON.stringify(value));
+  } catch (e) {
+    console.error("setLocalData error:", e);
+  }
 }
 
 const DEFAULT_BANNERS: BannerAsset[] = [];
@@ -511,6 +520,16 @@ export async function fetchVideos(
   stream: string,
   subject?: string,
 ): Promise<any[]> {
+  if (useLocalMock) {
+    const videos = getLocalData<any[]>("videos", []);
+    return videos.filter(
+      (v) =>
+        v.class === classRoom &&
+        v.stream === stream &&
+        (!subject || v.subject.toLowerCase() === subject.toLowerCase()),
+    );
+  }
+
   try {
     let q;
     if (subject) {
@@ -545,37 +564,33 @@ export async function fetchMicrobits(
   stream: string,
   subject?: string,
 ): Promise<any[]> {
+  const cleanSub = subject ? subject.toLowerCase().trim().replace(/^microbit\s*-\s*/i, "") : "";
+
   if (useLocalMock) {
     const mbits = getLocalData<any[]>("microbits", []);
     return mbits.filter(
       (m) =>
         m.class === classRoom &&
         m.stream === stream &&
-        (!subject || m.subject.toLowerCase() === subject.toLowerCase()),
+        (!subject || 
+         (m.subject || "").toLowerCase().trim().replace(/^microbit\s*-\s*/i, "") === cleanSub),
     );
   }
 
   try {
-    let q;
-    if (subject) {
-      q = query(
-        collection(db, "microbits"),
-        where("class", "==", classRoom),
-        where("stream", "==", stream),
-        where("subject", "==", subject),
-      );
-    } else {
-      q = query(
-        collection(db, "microbits"),
-        where("class", "==", classRoom),
-        where("stream", "==", stream),
-      );
-    }
+    const q = query(
+      collection(db, "microbits"),
+      where("class", "==", classRoom),
+      where("stream", "==", stream),
+    );
     const snap = await getDocs(q);
     const results: any[] = [];
     snap.forEach((doc) => {
       const data = doc.data() as Record<string, any>;
-      results.push({ id: doc.id, ...data });
+      const itemSubject = (data.subject || "").toLowerCase().trim().replace(/^microbit\s*-\s*/i, "");
+      if (!subject || itemSubject === cleanSub) {
+        results.push({ id: doc.id, ...data });
+      }
     });
     return results;
   } catch (err) {
@@ -850,8 +865,7 @@ export async function adminUploadPDF(
 // Edit PDF
 export async function adminEditPDF(
   id: string,
-  newTitle: string,
-  newLink: string,
+  updates: Partial<PdfAsset>
 ): Promise<void> {
   if (useLocalMock) {
     const pdfs = getLocalData<PdfAsset[]>("pdfs", []);
@@ -859,10 +873,12 @@ export async function adminEditPDF(
     if (index > -1) {
       pdfs[index] = {
         ...pdfs[index],
-        title: newTitle,
-        pdfUrl: newLink,
-        fileName: newTitle,
+        ...updates
       };
+      // If title is updated, consider updating fileName too
+      if (updates.title) {
+         pdfs[index].fileName = updates.title;
+      }
       setLocalData("pdfs", pdfs);
     }
     return;
@@ -870,11 +886,11 @@ export async function adminEditPDF(
 
   try {
     const docRef = doc(db, "pdfs", id);
-    await updateDoc(docRef, {
-      title: newTitle,
-      pdfUrl: newLink,
-      fileName: newTitle,
-    });
+    const apiUpdates: any = { ...updates };
+    if (updates.title) {
+       apiUpdates.fileName = updates.title;
+    }
+    await updateDoc(docRef, apiUpdates);
   } catch (err) {
     console.error("adminEditPDF error:", err);
     throw err;
@@ -1003,6 +1019,24 @@ export async function adminUploadVideo(
   videoUrl: string,
 ): Promise<void> {
   const newId = "video_" + Date.now();
+
+  if (useLocalMock) {
+    const videos = getLocalData<any[]>("videos", []);
+    videos.push({
+      id: newId,
+      title,
+      class: classRoom,
+      stream,
+      subject,
+      chapter,
+      part,
+      videoUrl,
+      uploadedAt: new Date().toISOString(),
+    });
+    setLocalData("videos", videos);
+    return;
+  }
+
   try {
     const docRef = doc(db, "videos", newId);
     await setDoc(docRef, {
@@ -1035,6 +1069,16 @@ export async function adminUpdateVideo(
     videoUrl: string;
   }>
 ): Promise<void> {
+  if (useLocalMock) {
+    const videos = getLocalData<any[]>("videos", []);
+    const idx = videos.findIndex((v) => v.id === id);
+    if (idx !== -1) {
+      videos[idx] = { ...videos[idx], ...updates };
+      setLocalData("videos", videos);
+    }
+    return;
+  }
+
   try {
     const docRef = doc(db, "videos", id);
     await updateDoc(docRef, updates);
@@ -1046,6 +1090,12 @@ export async function adminUpdateVideo(
 
 // Delete Video
 export async function adminDeleteVideo(id: string): Promise<void> {
+  if (useLocalMock) {
+    const videos = getLocalData<any[]>("videos", []);
+    setLocalData("videos", videos.filter((v) => v.id !== id));
+    return;
+  }
+
   try {
     const docRef = doc(db, "videos", id);
     await deleteDoc(docRef);
@@ -1066,6 +1116,37 @@ export async function adminDeleteMicrobit(id: string): Promise<void> {
     await deleteDoc(docRef);
   } catch (err) {
     console.error("adminDeleteMicrobit error:", err);
+    throw err;
+  }
+}
+
+// Update Microbit
+export async function adminUpdateMicrobit(
+  id: string,
+  updates: Partial<{
+    title: string;
+    class: "+1" | "+2";
+    stream: "Computer Science" | "Biology Science";
+    subject: string;
+    fileUrl: string;
+    fileName: string;
+  }>
+): Promise<void> {
+  if (useLocalMock) {
+    const mbits = getLocalData<any[]>("microbits", []);
+    const idx = mbits.findIndex((m) => m.id === id);
+    if (idx !== -1) {
+      mbits[idx] = { ...mbits[idx], ...updates };
+      setLocalData("microbits", mbits);
+    }
+    return;
+  }
+
+  try {
+    const docRef = doc(db, "microbits", id);
+    await updateDoc(docRef, updates);
+  } catch (err) {
+    console.error("adminUpdateMicrobit error:", err);
     throw err;
   }
 }

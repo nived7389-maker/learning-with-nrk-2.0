@@ -77,6 +77,24 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Videos collection rules
+    match /videos/{videoId} {
+      allow get, list: if isAdmin() || (
+        isApprovedStudent() && 
+        get(/databases/$(database)/documents/subscriptions/$(request.auth.uid)).data.status == 'active'
+      );
+      allow write: if isAdmin();
+    }
+
+    // Microbits collection rules
+    match /microbits/{microbitId} {
+      allow get, list: if isAdmin() || (
+        isApprovedStudent() && 
+        get(/databases/$(database)/documents/subscriptions/$(request.auth.uid)).data.status == 'active'
+      );
+      allow write: if isAdmin();
+    }
+
     // Banners collection rules
     match /banners/{bannerId} {
       allow read: if isSignedIn(); // All students can view home-screen promo banners

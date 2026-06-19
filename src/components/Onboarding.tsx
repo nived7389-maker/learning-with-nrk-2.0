@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { User, Sparkles, X, ChevronRight, Lock } from "lucide-react";
+import { User, Sparkles, X, ChevronRight, Lock, BookOpen, HelpCircle } from "lucide-react";
 import { BotLogo } from "./BotLogo";
 
 interface OnboardingProps {
@@ -10,22 +10,6 @@ interface OnboardingProps {
 
 export default function Onboarding({ onComplete, onCancel }: OnboardingProps) {
   const [currentPage, setCurrentPage] = useState(0);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (currentPage === 0) {
-        setCurrentPage(1);
-      } else if (currentPage === 1) {
-        // Auto-complete after 5 seconds on the second page
-        const completeTimer = setTimeout(() => {
-          onComplete();
-        }, 5000);
-        return () => clearTimeout(completeTimer);
-      }
-    }, 5000);
-
-    return () => clearTimeout(timer);
-  }, [currentPage, onComplete]);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
@@ -81,28 +65,48 @@ export default function Onboarding({ onComplete, onCancel }: OnboardingProps) {
               exit={{ opacity: 0, x: -50 }}
               className="px-8 pt-10 pb-16 flex flex-col space-y-6"
             >
-              <h2 className="text-xl font-black text-slate-800 dark:text-white text-center mb-2">
-                Personalize Your App
+              <h2 className="text-xl font-black text-slate-800 dark:text-white text-center mb-1">
+                Student Instructions
               </h2>
               
-              <div className="space-y-4">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-2xl bg-rose-100 dark:bg-rose-500/20 flex-shrink-0 flex items-center justify-center text-rose-600 dark:text-rose-400">
-                    <User className="w-5 h-5" />
+              <div className="space-y-3">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-8 h-8 rounded-xl bg-rose-100 dark:bg-rose-500/20 flex-shrink-0 flex items-center justify-center text-rose-600 dark:text-rose-400">
+                    <User className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200">Customize Profile</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Update your profile names anytime from settings.</p>
+                    <h3 className="font-bold text-xs text-slate-800 dark:text-slate-200">Customize Profile</h3>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Update student names under the settings screen anytime.</p>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-500/20 flex-shrink-0 flex items-center justify-center text-amber-600 dark:text-amber-400">
-                    <Lock className="w-5 h-5" />
+                <div className="flex items-start gap-3.5">
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex-shrink-0 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                    <Lock className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200">Premium Access</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Only subscribed students can access the classes and AI assistant.</p>
+                    <h3 className="font-bold text-xs text-slate-800 dark:text-slate-200">Premium Access</h3>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium font-medium">Clear full lesson databases with continuous payment updates.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3.5">
+                  <div className="w-8 h-8 rounded-xl bg-cyan-100 dark:bg-cyan-500/20 flex-shrink-0 flex items-center justify-center text-cyan-600 dark:text-cyan-400">
+                    <HelpCircle className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-xs text-slate-800 dark:text-slate-200">Two-in-One AI Doubts</h3>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium font-medium">Scroll down under any playing video lesson to ask Astr AI doubts.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 flex-shrink-0 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                    <BookOpen className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-xs text-slate-800 dark:text-slate-200">Study Vault</h3>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium font-medium">Access physical/computer science lectures, textbooks, and microbit guides.</p>
                   </div>
                 </div>
               </div>

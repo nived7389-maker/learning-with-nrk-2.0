@@ -27,6 +27,89 @@ export default function App() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [appConfig, setAppConfig] = useState<any>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<string>("default");
+
+  // Sync / check permission on load and request default
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setNotificationPermission(Notification.permission);
+      if (Notification.permission === "default") {
+        Notification.requestPermission()
+          .then((permission) => setNotificationPermission(permission))
+          .catch((err) => console.error("Error requesting notifications permission:", err));
+      }
+    }
+  }, []);
+
+  // Request browser permission manually if needed
+  const requestNotificationPermission = async () => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      try {
+        const p = await Notification.requestPermission();
+        setNotificationPermission(p);
+      } catch (err) {
+        console.error("Failed to request permission", err);
+      }
+    }
+  };
+
+  // Monitor incoming notifications and trigger a real device notification popup
+  useEffect(() => {
+    if (!appConfig?.notifications || !Array.isArray(appConfig.notifications)) return;
+
+    let notifiedIds: string[] = [];
+    const isFirstRun = !localStorage.getItem("lrnk_notified_ids");
+
+    if (!isFirstRun) {
+      try {
+        const stored = localStorage.getItem("lrnk_notified_ids");
+        if (stored) {
+          notifiedIds = JSON.parse(stored);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    const currentNotifiedSet = new Set(notifiedIds);
+    let changed = false;
+
+    // Loop through notifications and trigger native OS push if we have permission
+    appConfig.notifications.forEach((notif: any) => {
+      if (!notif || !notif.id || !notif.content) return;
+
+      if (!currentNotifiedSet.has(notif.id)) {
+        currentNotifiedSet.add(notif.id);
+        notifiedIds.push(notif.id);
+        changed = true;
+
+        if (!isFirstRun) {
+          if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+            try {
+              new Notification(appConfig.notificationTitle || "Learning With NRK", {
+                body: notif.content,
+                icon: appConfig.appLogoUrl || "/logo.png",
+              });
+            } catch (err) {
+              console.error("Failed to trigger visual notification:", err);
+            }
+          }
+        }
+      }
+    });
+
+    if (changed || isFirstRun) {
+      try {
+        // keep only last 100 notified IDs to prevent localStorage bloat
+        if (notifiedIds.length > 100) {
+          notifiedIds = notifiedIds.slice(notifiedIds.length - 100);
+        }
+        localStorage.setItem("lrnk_notified_ids", JSON.stringify(notifiedIds));
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [appConfig?.notifications, appConfig?.notificationTitle, appConfig?.appLogoUrl]);
 
   useEffect(() => {
     const unsubConfig = listenAppConfig((config) => {
@@ -136,7 +219,7 @@ export default function App() {
     
     if (student.status === "approved" || student.status === "pending") {
       setSessionState("portal");
-      if (justSignedUp) {
+      if (justSignedUp || isExplicitLogin) {
         setShowOnboarding(true);
       }
     } else {
@@ -327,14 +410,14 @@ export default function App() {
                     className={`flex flex-col items-center justify-center gap-1 min-w-[70px] outline-none cursor-pointer`}
                   >
                     <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-                      currentTab === "home"
+                      (currentTab === "home" && !selectedSubject?.startsWith("Microbit"))
                         ? "bg-gradient-to-tr from-pink-500 via-rose-500 to-red-500 shadow-lg shadow-rose-500/20 text-white scale-110"
                         : "text-slate-500 dark:text-slate-400 hover:text-gray-600 dark:hover:text-gray-300"
                     }`}>
                       <HomeIcon className="w-5 h-5" />
                     </div>
                     <span className={`text-[10px] font-sans font-bold ${
-                      currentTab === "home" ? "text-rose-600 dark:text-rose-400 scale-102" : "text-slate-500 dark:text-slate-400"
+                      (currentTab === "home" && !selectedSubject?.startsWith("Microbit")) ? "text-rose-600 dark:text-rose-400 scale-102" : "text-slate-500 dark:text-slate-400"
                     }`}>
                       Home
                     </span>
@@ -349,14 +432,14 @@ export default function App() {
                     className={`flex flex-col items-center justify-center gap-1 min-w-[70px] outline-none cursor-pointer`}
                   >
                     <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-                      currentTab === "microbit"
+                      (currentTab === "microbit" || (currentTab === "home" && selectedSubject?.startsWith("Microbit")))
                         ? "bg-gradient-to-tr from-pink-500 via-rose-500 to-red-500 shadow-lg shadow-rose-500/20 text-white scale-110"
                         : "text-slate-500 dark:text-slate-400 hover:text-gray-600 dark:hover:text-gray-300"
                     }`}>
                       <PaperCutsIcon className="w-5 h-5" />
                     </div>
                     <span className={`text-[10px] font-sans font-bold ${
-                      currentTab === "microbit" ? "text-rose-600 dark:text-rose-400 scale-102" : "text-slate-500 dark:text-slate-400"
+                      (currentTab === "microbit" || (currentTab === "home" && selectedSubject?.startsWith("Microbit"))) ? "text-rose-600 dark:text-rose-400 scale-102" : "text-slate-500 dark:text-slate-400"
                     }`}>
                       Micro-bit
                     </span>
@@ -434,13 +517,39 @@ export default function App() {
                           <X className="w-5 h-5" />
                         </button>
                         
-                        <div className="flex items-center gap-3 border-b border-slate-100 dark:border-white/5 pb-4 mb-4">
+                        <div className="flex items-center gap-3 border-b border-slate-100 dark:border-white/5 pb-4 mb-2">
                           <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
                             <Bell className="w-5 h-5" />
                           </div>
                           <h2 className="font-sans font-bold text-lg text-slate-900 dark:text-white">
                             {appConfig?.notificationTitle || "Notifications"}
                           </h2>
+                        </div>
+
+                        {/* Browser Push Notification Permission Status */}
+                        <div className="mb-4 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-white/5 text-[11px] font-sans">
+                          {notificationPermission === "granted" ? (
+                            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                              <span>✓ Push notifications active on this device</span>
+                            </div>
+                          ) : notificationPermission === "denied" ? (
+                            <div className="text-amber-600 dark:text-amber-400 font-medium leading-relaxed">
+                              ⚠️ Notifications are blocked. Please enable notification permission in your browser or phone settings to receive instant alerts.
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <p className="text-slate-600 dark:text-slate-400 leading-normal">
+                                Get instant updates on your mobile notification bar when teachers post announcements.
+                              </p>
+                              <button
+                                onClick={requestNotificationPermission}
+                                className="w-full py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-[10px] transition-colors shadow-sm cursor-pointer"
+                              >
+                                Enable Mobile Notifications
+                              </button>
+                            </div>
+                          )}
                         </div>
                         
                         <div className="flex-1 overflow-y-auto space-y-3 -mr-2 pr-2">

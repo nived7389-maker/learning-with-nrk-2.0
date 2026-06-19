@@ -23,6 +23,7 @@ import {
   RefreshCw,
   Bell,
   Video,
+  Loader2,
 } from "lucide-react";
 import {
   getAdminDashboardStats,
@@ -46,6 +47,8 @@ import {
   adminUploadMicrobit,
   adminUploadMicrobitFile,
   adminDeleteMicrobit,
+  adminUpdateMicrobit,
+  fetchMicrobits,
   adminUploadVideo,
   adminUpdateVideo,
   adminDeleteVideo,
@@ -72,6 +75,7 @@ export default function Admin({ onReturn }: AdminProps) {
     | "pdf_upload"
     | "video_upload"
     | "microbit_upload"
+    | "microbit_library"
     | "banner"
     | "sub_manage"
     | "library"
@@ -136,7 +140,7 @@ export default function Admin({ onReturn }: AdminProps) {
   const [mbStream, setMbStream] = useState<
     "Computer Science" | "Biology Science"
   >("Computer Science");
-  const [mbSubject, setMbSubject] = useState<string>("Onam Exam");
+  const [mbSubject, setMbSubject] = useState<string>("Microbit - Onam Exam");
   const [mbLink, setMbLink] = useState("");
   const [mbPhysicalFile, setMbPhysicalFile] = useState<File | null>(null);
   const [mbSubmittingFile, setMbSubmittingFile] = useState(false);
@@ -170,8 +174,20 @@ export default function Admin({ onReturn }: AdminProps) {
   >("Computer Science");
   const [libraryVideos, setLibraryVideos] = useState<VideoAsset[]>([]);
   const [libraryVideoLoading, setLibraryVideoLoading] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{ type: 'video' | 'pdf' | 'microbit', id: string, name: string, extra?: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [editingVideo, setEditingVideo] = useState<VideoAsset | null>(null);
   const [editVideoSubmitting, setEditVideoSubmitting] = useState(false);
+
+  // Microbit Library Manager State
+  const [libraryMicrobitClass, setLibraryMicrobitClass] = useState<"+1" | "+2">("+2");
+  const [libraryMicrobitStream, setLibraryMicrobitStream] = useState<
+    "Computer Science" | "Biology Science"
+  >("Computer Science");
+  const [libraryMicrobits, setLibraryMicrobits] = useState<any[]>([]);
+  const [libraryMicrobitLoading, setLibraryMicrobitLoading] = useState(false);
+  const [editingMicrobit, setEditingMicrobit] = useState<any | null>(null);
+  const [editMicrobitSubmitting, setEditMicrobitSubmitting] = useState(false);
 
   // Sync Library
   useEffect(() => {
@@ -193,6 +209,16 @@ export default function Admin({ onReturn }: AdminProps) {
         .finally(() => setLibraryVideoLoading(false));
     }
   }, [activeTab, libraryVideoClass, libraryVideoStream]);
+
+  useEffect(() => {
+    if (activeTab === "microbit_library") {
+      setLibraryMicrobitLoading(true);
+      fetchMicrobits(libraryMicrobitClass, libraryMicrobitStream)
+        .then(setLibraryMicrobits)
+        .catch(console.error)
+        .finally(() => setLibraryMicrobitLoading(false));
+    }
+  }, [activeTab, libraryMicrobitClass, libraryMicrobitStream]);
 
   const correctPassword = "123nfjhhgb";
 
@@ -368,11 +394,66 @@ export default function Admin({ onReturn }: AdminProps) {
     }
   };
 
-  const extractYouTubeId = (url: string) => {
-    if (!url) return "";
-    const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[7].length === 11) ? match[7] : url.replace(/[^a-zA-Z0-9_-]/g, "");
+  const commonSubjects = ["Physics", "Chemistry", "Mathematics", "English", "Malayalam", "Hindi"];
+
+  const getSubjectOptions = (stream: string, includeMicrobit: boolean = false) => {
+    let options = [...commonSubjects];
+    if (stream === "Computer Science") {
+      options.push("Computer Science");
+    } else if (stream === "Biology Science") {
+      options.push("Biology");
+    }
+    if (includeMicrobit) {
+      options.push("Microbit - Onam Exam", "Microbit - Christmas Exam", "Microbit - Annual Exam");
+    }
+    return options;
+  };
+
+  const extractYouTubeId = (url: string): string | null => {
+    if (!url) return null;
+    const cleanUrl = url.trim();
+
+    // 1. Direct 11-character ID
+    if (/^[a-zA-Z0-9_-]{11}$/.test(cleanUrl)) {
+      return cleanUrl;
+    }
+
+    // 2. Standard watch URL or any URL containing v=VIDEO_ID
+    const videoIdParamMatch = cleanUrl.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+    if (videoIdParamMatch) {
+      return videoIdParamMatch[1];
+    }
+
+    // 3. Path-based IDs: /embed/ID, /v/ID, /shorts/ID, /live/ID, youtu.be/ID
+    const pathMatch = cleanUrl.match(/(?:shorts\/|live\/|embed\/|v\/|youtu\.be\/|y2u\.be\/)([a-zA-Z0-9_-]{11})/i);
+    if (pathMatch) {
+      return pathMatch[1];
+    }
+
+    // 4. Fallback: match any 11-character sequence of letters, digits, underscores, hyphens
+    // that is separated by slashes or query parameters
+    const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?)|(shorts\/)|(live\/))\??v?=?([^#&?]*).*/;
+    const match = cleanUrl.match(regExp);
+    if (match) {
+      // Find the last captured group of length >= 11
+      for (let i = match.length - 1; i >= 0; i--) {
+        const val = match[i];
+        if (val && val.length >= 11) {
+          const id = val.substring(0, 11);
+          if (/^[a-zA-Z0-9_-]{11}$/.test(id)) {
+            return id;
+          }
+        }
+      }
+    }
+
+    // 5. Fallback for corrupted database values or naked starts
+    if (cleanUrl.length > 11 && /^[a-zA-Z0-9_-]+$/.test(cleanUrl)) {
+      if (!cleanUrl.toLowerCase().startsWith('http') && !cleanUrl.toLowerCase().startsWith('www')) {
+        return cleanUrl.substring(0, 11);
+      }
+    }
+    return null;
   };
 
   const handleVideoSubmit = async (e: React.FormEvent) => {
@@ -382,9 +463,14 @@ export default function Admin({ onReturn }: AdminProps) {
       return;
     }
 
+    const videoIdToSave = extractYouTubeId(videoLink);
+    if (!videoIdToSave) {
+      alert("Invalid YouTube Link. Please provide a valid YouTube URL (e.g., https://youtu.be/VIDEO_ID or a valid 11-character Video ID).");
+      return;
+    }
+
     setVideoSubmitting(true);
     try {
-      const videoIdToSave = extractYouTubeId(videoLink);
       await adminUploadVideo(
         videoTitle,
         videoClass,
@@ -409,13 +495,15 @@ export default function Admin({ onReturn }: AdminProps) {
     }
   };
 
-  const handleDeleteVideo = async (videoId: string) => {
-    if (!confirm("Do you want to delete this study video?")) return;
+  const handleDeleteVideoClick = (video: VideoAsset) => {
+    setItemToDelete({ type: 'video', id: video.id, name: video.title });
+  };
+
+  const executeDeleteVideo = async (videoId: string) => {
     try {
       await adminDeleteVideo(videoId);
-      triggerToast("Video deleted from index.");
+      triggerToast("Video deleted permanently from the app.");
       refreshAdminData();
-      // re-fetch library videos if in that tab
       if (activeTab === "video_library") {
          const list = await fetchVideos(libraryVideoClass, libraryVideoStream);
          setLibraryVideos(list);
@@ -427,12 +515,38 @@ export default function Admin({ onReturn }: AdminProps) {
     }
   };
 
+  const handleDeleteMicrobitClick = (mbit: any) => {
+    setItemToDelete({ type: 'microbit', id: mbit.id, name: mbit.title });
+  };
+
+  const executeDeleteMicrobit = async (id: string) => {
+    try {
+      await adminDeleteMicrobit(id);
+      triggerToast("Micro:bit material deleted permanently from the app.");
+      refreshAdminData();
+      if (activeTab === "microbit_library") {
+         const list = await fetchMicrobits(libraryMicrobitClass, libraryMicrobitStream);
+         setLibraryMicrobits(list);
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert(e.message || "Failed to delete microbit.");
+      throw e;
+    }
+  };
+
   const handleUpdateVideoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingVideo) return;
+    
+    const videoIdToSave = extractYouTubeId(editingVideo.videoUrl || "");
+    if (!videoIdToSave) {
+      alert("Invalid YouTube Link. Please provide a valid URL.");
+      return;
+    }
+
     setEditVideoSubmitting(true);
     try {
-      const videoIdToSave = extractYouTubeId(editingVideo.videoUrl || "");
       await adminUpdateVideo(editingVideo.id, {
         title: editingVideo.title,
         class: editingVideo.class,
@@ -484,16 +598,51 @@ export default function Admin({ onReturn }: AdminProps) {
     }
   };
 
-  const handleDeletePdf = async (pdfId: string, fileName: string) => {
-    if (!confirm("Do you want to delete this study notes link?")) return;
+  const handleDeletePdfClick = (pdf: PdfAsset) => {
+    setItemToDelete({ type: 'pdf', id: pdf.id, name: pdf.title, extra: pdf.fileName });
+  };
+
+  const executeDeletePdf = async (pdfId: string, fileName: string) => {
     try {
       await adminDeletePDF(pdfId, fileName);
-      triggerToast("Link document deleted from index.");
+      triggerToast("Notes document deleted permanently from the app.");
       refreshAdminData();
     } catch (e: any) {
       console.error(e);
       alert(e.message || "Failed to delete PDF.");
       throw e;
+    }
+  };
+
+  const handleEditMicrobit = (mbit: any) => {
+    setEditingMicrobit({ ...mbit });
+  };
+
+  const handleUpdateMicrobitSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMicrobit) return;
+    setEditMicrobitSubmitting(true);
+    try {
+      await adminUpdateMicrobit(editingMicrobit.id, {
+        title: editingMicrobit.title,
+        class: editingMicrobit.class,
+        stream: editingMicrobit.stream,
+        subject: editingMicrobit.subject,
+        fileUrl: editingMicrobit.fileUrl || (editingMicrobit as any).link || "",
+        fileName: editingMicrobit.fileName || editingMicrobit.title
+      });
+      triggerToast("Micro:bit material updated successfully.");
+      
+      const list = await fetchMicrobits(libraryMicrobitClass, libraryMicrobitStream);
+      setLibraryMicrobits(list);
+
+      setEditingMicrobit(null);
+      refreshAdminData();
+    } catch (e: any) {
+      console.error(e);
+      alert("Failed to edit Micro:bit: " + (e.message || ""));
+    } finally {
+      setEditMicrobitSubmitting(false);
     }
   };
 
@@ -506,14 +655,19 @@ export default function Admin({ onReturn }: AdminProps) {
     if (!editingPdf) return;
     setEditPdfSubmitting(true);
     try {
-      await adminEditPDF(editingPdf.id, editingPdf.title, editingPdf.pdfUrl);
+      await adminEditPDF(editingPdf.id, {
+        title: editingPdf.title,
+        pdfUrl: editingPdf.pdfUrl,
+        stream: editingPdf.stream,
+        subject: editingPdf.subject
+      });
       triggerToast("Library document updated successfully.");
 
       // Update local state if we are inside library active tab
       setLibraryPdfs((prev) =>
         prev.map((p) =>
           p.id === editingPdf.id
-            ? { ...p, title: editingPdf.title, pdfUrl: editingPdf.pdfUrl }
+            ? { ...p, title: editingPdf.title, pdfUrl: editingPdf.pdfUrl, stream: editingPdf.stream, subject: editingPdf.subject }
             : p,
         ),
       );
@@ -525,6 +679,23 @@ export default function Admin({ onReturn }: AdminProps) {
       alert("Failed to edit document.");
     } finally {
       setEditPdfSubmitting(false);
+    }
+  };
+
+  const confirmDeletion = async () => {
+    if (!itemToDelete) return;
+    setIsDeleting(true);
+    try {
+      if (itemToDelete.type === 'video') {
+        await executeDeleteVideo(itemToDelete.id);
+      } else if (itemToDelete.type === 'pdf') {
+        await executeDeletePdf(itemToDelete.id, itemToDelete.extra || '');
+      } else if (itemToDelete.type === 'microbit') {
+        await executeDeleteMicrobit(itemToDelete.id);
+      }
+      setItemToDelete(null);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -922,6 +1093,64 @@ export default function Admin({ onReturn }: AdminProps) {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {itemToDelete && (
+          <motion.div
+            id="delete-confirmation-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-white/80 dark:bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 15 }}
+              className="bg-white dark:bg-[#0f1115] border border-slate-200 dark:border-white/10 rounded-3xl w-full max-w-[340px] p-6 shadow-2xl"
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 bg-rose-500/10 rounded-full flex items-center justify-center mb-4">
+                  <Trash2 className="w-8 h-8 text-rose-500" />
+                </div>
+                <h3 className="text-base font-bold text-slate-800 dark:text-white mb-2">Delete Permanently?</h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">
+                  Are you sure you want to delete this {itemToDelete.type === 'video' ? 'study video' : itemToDelete.type === 'microbit' ? 'Micro:bit material' : 'notes document'}?
+                </p>
+                <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-200 dark:border-white/10 w-full mb-6 text-left">
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 line-clamp-2">
+                    {itemToDelete.name}
+                  </p>
+                </div>
+                <p className="text-[11px] font-semibold text-rose-500/80 mb-6 bg-rose-500/10 p-3 rounded-lg border border-rose-500/20 text-left leading-relaxed">
+                  By deleting this, it will be fully removed from the app. Students and admins will not be able to watch or access this content ever again in their entire life. This action cannot be undone.
+                </p>
+
+                <div className="flex w-full gap-3">
+                  <button
+                    onClick={() => setItemToDelete(null)}
+                    disabled={isDeleting}
+                    className="flex-1 py-3 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 font-semibold text-xs transition-colors hover:bg-slate-200 dark:hover:bg-white/10 outline-none cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDeletion}
+                    disabled={isDeleting}
+                    className="flex-1 py-3 rounded-xl bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-500/20 hover:bg-rose-400 transition-colors outline-none cursor-pointer flex justify-center items-center gap-2"
+                  >
+                    {isDeleting ? (
+                       <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                       "Yes, Delete"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Admin Action Nav Bar (Matches layout) */}
       <div className="bg-slate-50 dark:bg-slate-950 border-b border-black/5 dark:border-white/5 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -986,6 +1215,7 @@ export default function Admin({ onReturn }: AdminProps) {
             { id: "video_upload", label: "Study Videos Uploads", icon: FilePlus },
             { id: "video_library", label: "Library Video Manager", icon: BookOpen },
             { id: "microbit_upload", label: "Micro:bit Uploads", icon: FilePlus },
+            { id: "microbit_library", label: "Library Micro:bit Manager", icon: BookOpen },
             { id: "banner", label: "Banner ads sliders", icon: Image },
             {
               id: "sub_manage",
@@ -1354,7 +1584,12 @@ service cloud.firestore {
                     <select
                       id="pdf-stream-select"
                       value={pdfStream}
-                      onChange={(e) => setPdfStream(e.target.value as any)}
+                      onChange={(e) => {
+                        const val = e.target.value as any;
+                        setPdfStream(val);
+                        if (val === "Biology Science" && pdfSubject === "Computer Science") setPdfSubject("Biology");
+                        else if (val === "Computer Science" && pdfSubject === "Biology") setPdfSubject("Computer Science");
+                      }}
                       className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white"
                     >
                       <option value="Computer Science">Computer Science</option>
@@ -1373,18 +1608,9 @@ service cloud.firestore {
                       onChange={(e) => setPdfSubject(e.target.value as any)}
                       className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white"
                     >
-                      <option value="Physics">Physics</option>
-                      <option value="Chemistry">Chemistry</option>
-                      <option value="Mathematics">Mathematics</option>
-                      <option value="English">English</option>
-                      <option value="Malayalam">Malayalam</option>
-                      <option value="Computer Science">Computer Science</option>
-                      <option value="Biology">Biology</option>
-                      <option value="Hindi">Hindi</option>
-                      <option disabled>──────────</option>
-                      <option value="Microbit - Onam Exam">Microbit - Onam Exam</option>
-                      <option value="Microbit - Christmas Exam">Microbit - Christmas Exam</option>
-                      <option value="Microbit - Annual Exam">Microbit - Annual Exam</option>
+                      {getSubjectOptions(pdfStream, true).map((sub) => (
+                        <option key={sub} value={sub}>{sub}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -1468,7 +1694,7 @@ service cloud.firestore {
                         </div>
                       </div>
                       <button
-                        onClick={() => handleDeletePdf(pdf.id, pdf.fileName)}
+                        onClick={() => handleDeletePdfClick(pdf)}
                         className="p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -1519,7 +1745,12 @@ service cloud.firestore {
                     <select
                       className="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500/50"
                       value={videoStream}
-                      onChange={(e) => setVideoStream(e.target.value as any)}
+                      onChange={(e) => {
+                        const val = e.target.value as any;
+                        setVideoStream(val);
+                        if (val === "Biology Science" && videoSubject === "Computer Science") setVideoSubject("Biology");
+                        else if (val === "Computer Science" && videoSubject === "Biology") setVideoSubject("Computer Science");
+                      }}
                     >
                       <option value="Computer Science">Computer Science</option>
                       <option value="Biology Science">Biology Science</option>
@@ -1536,16 +1767,9 @@ service cloud.firestore {
                       value={videoSubject}
                       onChange={(e) => setVideoSubject(e.target.value as any)}
                     >
-                      <option value="Physics">Physics</option>
-                      <option value="Chemistry">Chemistry</option>
-                      <option value="Mathematics">Mathematics</option>
-                      <option value="Biology">Biology</option>
-                      <option value="English">English</option>
-                      <option value="Hindi">Hindi</option>
-                      <option value="Malayalam">Malayalam</option>
-                      <option value="Computer Science">
-                        Computer Science
-                      </option>
+                      {getSubjectOptions(videoStream, false).map((sub) => (
+                        <option key={sub} value={sub}>{sub}</option>
+                      ))}
                     </select>
                   </div>
                   {/* Chapter Target */}
@@ -1572,8 +1796,11 @@ service cloud.firestore {
                     <input
                       type="number"
                       min={1}
-                      value={videoPart}
-                      onChange={(e) => setVideoPart(parseInt(e.target.value))}
+                      value={isNaN(videoPart) ? "" : videoPart}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        setVideoPart(isNaN(val) ? "" as any : val);
+                      }}
                       className="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500/50"
                     />
                   </div>
@@ -1817,6 +2044,25 @@ service cloud.firestore {
                                 <input type="text" value={editingPdf.title} onChange={(e) => setEditingPdf({...editingPdf, title: e.target.value})} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none" />
                               </div>
                               <div>
+                                 <label className="text-[10px] text-slate-500 font-semibold block mb-1">Stream</label>
+                                 <select value={editingPdf.stream} onChange={(e) => {
+                                   const newStream = e.target.value as any;
+                                   let newSubject = editingPdf.subject;
+                                   if (newStream === "Biology Science" && newSubject === "Computer Science") newSubject = "Biology";
+                                   if (newStream === "Computer Science" && newSubject === "Biology") newSubject = "Computer Science";
+                                   setEditingPdf({...editingPdf, stream: newStream, subject: newSubject});
+                                 }} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none">
+                                   <option value="Computer Science">Computer Science</option>
+                                   <option value="Biology Science">Biology Science</option>
+                                 </select>
+                              </div>
+                              <div>
+                                 <label className="text-[10px] text-slate-500 font-semibold block mb-1">Subject</label>
+                                 <select value={editingPdf.subject} onChange={(e) => setEditingPdf({...editingPdf, subject: e.target.value})} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none">
+                                    {getSubjectOptions(editingPdf.stream, true).map(s => <option key={s} value={s}>{s}</option>)}
+                                 </select>
+                              </div>
+                              <div>
                                 <label className="text-[10px] text-slate-500 font-semibold block mb-1">PDF Link</label>
                                 <input type="url" value={editingPdf.pdfUrl} onChange={(e) => setEditingPdf({...editingPdf, pdfUrl: e.target.value})} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none" />
                               </div>
@@ -1853,13 +2099,7 @@ service cloud.firestore {
                                 <span className="hidden sm:inline">Edit</span>
                               </button>
                               <button
-                                onClick={() => {
-                                  handleDeletePdf(pdf.id, pdf.fileName).then(() => {
-                                    setLibraryPdfs((prev) =>
-                                      prev.filter((p) => p.id !== pdf.id),
-                                    );
-                                  });
-                                }}
+                                onClick={() => handleDeletePdfClick(pdf)}
                                 className="p-2 sm:px-4 sm:py-2 flex items-center justify-center rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition-colors font-semibold"
                               >
                                 <Trash2 className="w-4 h-4 sm:mr-2" />
@@ -1947,12 +2187,34 @@ service cloud.firestore {
                                    <input type="text" value={editingVideo.title} onChange={(e) => setEditingVideo({...editingVideo, title: e.target.value})} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none" />
                                 </div>
                                 <div>
+                                   <label className="text-[10px] text-slate-500 font-semibold block mb-1">Stream</label>
+                                   <select value={editingVideo.stream} onChange={(e) => {
+                                     const newStream = e.target.value as any;
+                                     let newSubject = editingVideo.subject;
+                                     if (newStream === "Biology Science" && newSubject === "Computer Science") newSubject = "Biology";
+                                     if (newStream === "Computer Science" && newSubject === "Biology") newSubject = "Computer Science";
+                                     setEditingVideo({...editingVideo, stream: newStream, subject: newSubject});
+                                   }} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none">
+                                     <option value="Computer Science">Computer Science</option>
+                                     <option value="Biology Science">Biology Science</option>
+                                   </select>
+                                </div>
+                                <div>
+                                   <label className="text-[10px] text-slate-500 font-semibold block mb-1">Subject</label>
+                                   <select value={editingVideo.subject} onChange={(e) => setEditingVideo({...editingVideo, subject: e.target.value})} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none">
+                                      {getSubjectOptions(editingVideo.stream, false).map(s => <option key={s} value={s}>{s}</option>)}
+                                   </select>
+                                </div>
+                                <div>
                                    <label className="text-[10px] text-slate-500 font-semibold block mb-1">Chapter</label>
                                    <input type="text" value={editingVideo.chapter} onChange={(e) => setEditingVideo({...editingVideo, chapter: e.target.value})} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none" />
                                 </div>
                                 <div>
                                    <label className="text-[10px] text-slate-500 font-semibold block mb-1">Part</label>
-                                   <input type="number" value={editingVideo.part} onChange={(e) => setEditingVideo({...editingVideo, part: parseInt(e.target.value)})} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none" />
+                                   <input type="number" value={isNaN(editingVideo.part) ? "" : editingVideo.part} onChange={(e) => {
+                                      const val = parseInt(e.target.value);
+                                      setEditingVideo({...editingVideo, part: isNaN(val) ? "" as any : val});
+                                    }} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none" />
                                 </div>
                                 <div>
                                    <label className="text-[10px] text-slate-500 font-semibold block mb-1">YouTube Link</label>
@@ -1991,14 +2253,168 @@ service cloud.firestore {
                                 <span className="hidden sm:inline">Edit</span>
                               </button>
                               <button
-                                onClick={() => {
-                                  handleDeleteVideo(video.id).then(() => {
-                                    setLibraryVideos((prev) =>
-                                      prev.filter((p) => p.id !== video.id),
-                                    );
-                                  });
-                                }}
+                                onClick={() => handleDeleteVideoClick(video)}
                                 className="p-2 sm:px-4 sm:py-2 flex items-center justify-center rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition-colors font-semibold"
+                              >
+                                <Trash2 className="w-4 h-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Delete</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: MICROBIT LIBRARY MANAGER */}
+          {activeTab === "microbit_library" && (
+            <div className="space-y-6">
+              <div className="border-b border-black/5 dark:border-white/5 pb-3 flex items-center justify-between">
+                <div>
+                  <h2 className="font-sans font-bold text-base text-indigo-300">
+                    Global Micro:bit Library Manager
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Select a section to view all Micro:bit materials and instantly delete them.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTab("microbit_upload")}
+                  className="px-4 py-2 bg-indigo-500/10 text-indigo-400 text-xs font-semibold rounded-lg hover:bg-indigo-500/20 transition-colors"
+                >
+                  + Upload Micro:bit
+                </button>
+              </div>
+
+              {/* Filters */}
+              <div className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-black/5 dark:border-white/5 flex flex-col sm:flex-row gap-4">
+                <div className="flex-1">
+                  <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+                    Academic Class
+                  </label>
+                  <select
+                    className="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none"
+                    value={libraryMicrobitClass}
+                    onChange={(e) => setLibraryMicrobitClass(e.target.value as any)}
+                  >
+                    <option value="+1">Plus One (+1)</option>
+                    <option value="+2">Plus Two (+2)</option>
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-1">
+                    Stream/Section
+                  </label>
+                  <select
+                    className="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none"
+                    value={libraryMicrobitStream}
+                    onChange={(e) => setLibraryMicrobitStream(e.target.value as any)}
+                  >
+                    <option value="Computer Science">Computer Science</option>
+                    <option value="Biology Science">Biology Science</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Library View */}
+              <div>
+                <h3 className="text-xs uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wider mb-3">
+                  Uploaded Micro:bits
+                </h3>
+                {libraryMicrobitLoading ? (
+                  <p className="text-xs text-indigo-300">
+                    Loading micro:bit library contents...
+                  </p>
+                ) : libraryMicrobits.length === 0 ? (
+                  <p className="text-xs text-slate-500">
+                    No micro:bit materials found in this section.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {libraryMicrobits.map((mbit) => (
+                      <div key={mbit.id} className="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-xl overflow-hidden">
+                        {editingMicrobit?.id === mbit.id ? (
+                          <div className="p-4 space-y-4">
+                            <h4 className="text-xs font-bold text-teal-400">Edit Micro:bit Material Details</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[10px] text-slate-500 font-semibold block mb-1">Title</label>
+                                <input type="text" value={editingMicrobit.title} onChange={(e) => setEditingMicrobit({...editingMicrobit, title: e.target.value})} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none" />
+                              </div>
+                              <div>
+                                 <label className="text-[10px] text-slate-500 font-semibold block mb-1">Stream</label>
+                                 <select value={editingMicrobit.stream} onChange={(e) => {
+                                   const newStream = e.target.value as any;
+                                   let newSubject = editingMicrobit.subject;
+                                   if (newStream === "Biology Science" && (newSubject.includes("Computer Science") || newSubject === "Computer Science")) {
+                                     newSubject = "Microbit - Onam Exam";
+                                   }
+                                   setEditingMicrobit({...editingMicrobit, stream: newStream, subject: newSubject});
+                                 }} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none">
+                                   <option value="Computer Science">Computer Science</option>
+                                   <option value="Biology Science">Biology Science</option>
+                                 </select>
+                              </div>
+                              <div>
+                                 <label className="text-[10px] text-slate-500 font-semibold block mb-1">Subject</label>
+                                 <select value={editingMicrobit.subject} onChange={(e) => setEditingMicrobit({...editingMicrobit, subject: e.target.value})} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none">
+                                    {getSubjectOptions(editingMicrobit.stream, true).map(s => <option key={s} value={s}>{s}</option>)}
+                                 </select>
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-slate-500 font-semibold block mb-1">Class</label>
+                                <select value={editingMicrobit.class} onChange={(e) => setEditingMicrobit({...editingMicrobit, class: e.target.value as any})} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none">
+                                   <option value="+1">Plus One (+1)</option>
+                                   <option value="+2">Plus Two (+2)</option>
+                                </select>
+                              </div>
+                              <div className="sm:col-span-2">
+                                <label className="text-[10px] text-slate-500 font-semibold block mb-1">Document Link / URL</label>
+                                <input type="url" value={editingMicrobit.fileUrl || (editingMicrobit as any).link || ""} onChange={(e) => setEditingMicrobit({...editingMicrobit, fileUrl: e.target.value, link: e.target.value} as any)} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none" />
+                              </div>
+                            </div>
+                            <div className="flex justify-end gap-2 mt-3">
+                              <button onClick={() => setEditingMicrobit(null)} className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-500 hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer">Cancel</button>
+                              <button onClick={handleUpdateMicrobitSubmit} disabled={editMicrobitSubmitting} className="px-4 py-2 rounded-lg text-xs font-semibold bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 transition-colors cursor-pointer">{editMicrobitSubmitting ? 'Saving...' : 'Save Changes'}</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between text-left font-sans text-xs gap-3">
+                            <div className="flex gap-3 w-full sm:w-auto overflow-hidden">
+                              <div className="w-10 h-10 rounded-lg bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 shrink-0">
+                                <FilePlus className="w-5 h-5" />
+                              </div>
+                              <div className="overflow-hidden">
+                                <span className="block text-slate-900 dark:text-white font-bold text-sm truncate">
+                                  {mbit.title}
+                                </span>
+                                <span className="text-[10px] text-amber-400 font-bold tracking-wide mt-0.5 block truncate">
+                                  {mbit.subject} &bull; {mbit.class}
+                                </span>
+                                <span className="text-[9px] text-slate-600 dark:text-slate-400 font-mono block mt-0.5 truncate gap-1 flex items-center mb-1">
+                                  <span>{mbit.uploadedAt ? new Date(mbit.uploadedAt).toLocaleDateString() : 'N/A'}</span>
+                                  <span className="opacity-50 mx-1">|</span>
+                                  <span className="text-[9px] max-w-[200px] truncate text-indigo-400/80">
+                                    {mbit.fileName}
+                                  </span>
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 w-full sm:w-auto justify-end shrink-0">
+                              <button
+                                onClick={() => handleEditMicrobit(mbit)}
+                                className="p-2 sm:px-4 sm:py-2 flex items-center justify-center rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-400 hover:bg-teal-500/20 transition-colors font-semibold cursor-pointer"
+                              >
+                                <Pencil className="w-4 h-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Edit</span>
+                              </button>
+                              <button
+                                onClick={() => handleDeleteMicrobitClick(mbit)}
+                                className="p-2 sm:px-4 sm:py-2 flex items-center justify-center rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition-colors font-semibold cursor-pointer"
                               >
                                 <Trash2 className="w-4 h-4 sm:mr-2" />
                                 <span className="hidden sm:inline">Delete</span>
