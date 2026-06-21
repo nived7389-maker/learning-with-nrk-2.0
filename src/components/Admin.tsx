@@ -36,6 +36,7 @@ import {
   adminUpdateBanner,
   adminDeleteBanner,
   adminToggleSubscription,
+  fetchAllSubscriptions,
   fetchBanners,
   fetchPDFs,
   fetchLibraryPDFs,
@@ -54,7 +55,7 @@ import {
   adminDeleteVideo,
   fetchVideos
 } from "../firebase";
-import { Student, PdfAsset, BannerAsset, SubjectName, VideoAsset } from "../types";
+import { Student, PdfAsset, BannerAsset, SubjectName, VideoAsset, Subscription } from "../types";
 
 interface AdminProps {
   onReturn: () => void;
@@ -103,6 +104,7 @@ export default function Admin({ onReturn }: AdminProps) {
     activeSubs: 0,
   });
   const [studentsList, setStudentsList] = useState<Student[]>([]);
+  const [subscriptionsList, setSubscriptionsList] = useState<Subscription[]>([]);
   const [bannersList, setBannersList] = useState<BannerAsset[]>([]);
   const [pdfSyncList, setPdfSyncList] = useState<PdfAsset[]>([]);
   const [microbitSyncList, setMicrobitSyncList] = useState<any[]>([]);
@@ -124,7 +126,7 @@ export default function Admin({ onReturn }: AdminProps) {
   const [pdfTitle, setPdfTitle] = useState("");
   const [pdfClass, setPdfClass] = useState<"+1" | "+2">("+2");
   const [pdfStream, setPdfStream] = useState<
-    "Computer Science" | "Biology Science"
+    "Computer Science" | "Biology Science" | "Both science"
   >("Computer Science");
   const [pdfSubject, setPdfSubject] = useState<SubjectName>("Physics");
   const [pdfLink, setPdfLink] = useState("");
@@ -138,7 +140,7 @@ export default function Admin({ onReturn }: AdminProps) {
   const [mbTitle, setMbTitle] = useState("");
   const [mbClass, setMbClass] = useState<"+1" | "+2">("+2");
   const [mbStream, setMbStream] = useState<
-    "Computer Science" | "Biology Science"
+    "Computer Science" | "Biology Science" | "Both science"
   >("Computer Science");
   const [mbSubject, setMbSubject] = useState<string>("Microbit - Onam Exam");
   const [mbLink, setMbLink] = useState("");
@@ -148,7 +150,7 @@ export default function Admin({ onReturn }: AdminProps) {
   // Library Manager View State
   const [libraryClass, setLibraryClass] = useState<"+1" | "+2">("+2");
   const [libraryStream, setLibraryStream] = useState<
-    "Computer Science" | "Biology Science"
+    "Computer Science" | "Biology Science" | "Both science"
   >("Computer Science");
   const [libraryPdfs, setLibraryPdfs] = useState<PdfAsset[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
@@ -159,7 +161,7 @@ export default function Admin({ onReturn }: AdminProps) {
   const [videoTitle, setVideoTitle] = useState("");
   const [videoClass, setVideoClass] = useState<"+1" | "+2">("+2");
   const [videoStream, setVideoStream] = useState<
-    "Computer Science" | "Biology Science"
+    "Computer Science" | "Biology Science" | "Both science"
   >("Computer Science");
   const [videoSubject, setVideoSubject] = useState<SubjectName>("Physics");
   const [videoChapter, setVideoChapter] = useState("");
@@ -170,7 +172,7 @@ export default function Admin({ onReturn }: AdminProps) {
   // Video Library Manager State
   const [libraryVideoClass, setLibraryVideoClass] = useState<"+1" | "+2">("+2");
   const [libraryVideoStream, setLibraryVideoStream] = useState<
-    "Computer Science" | "Biology Science"
+    "Computer Science" | "Biology Science" | "Both science"
   >("Computer Science");
   const [libraryVideos, setLibraryVideos] = useState<VideoAsset[]>([]);
   const [libraryVideoLoading, setLibraryVideoLoading] = useState(false);
@@ -182,7 +184,7 @@ export default function Admin({ onReturn }: AdminProps) {
   // Microbit Library Manager State
   const [libraryMicrobitClass, setLibraryMicrobitClass] = useState<"+1" | "+2">("+2");
   const [libraryMicrobitStream, setLibraryMicrobitStream] = useState<
-    "Computer Science" | "Biology Science"
+    "Computer Science" | "Biology Science" | "Both science"
   >("Computer Science");
   const [libraryMicrobits, setLibraryMicrobits] = useState<any[]>([]);
   const [libraryMicrobitLoading, setLibraryMicrobitLoading] = useState(false);
@@ -242,6 +244,9 @@ export default function Admin({ onReturn }: AdminProps) {
 
       const list = await fetchAllStudents();
       setStudentsList(list);
+
+      const subs = await fetchAllSubscriptions();
+      setSubscriptionsList(subs);
 
       // Load banners
       const bannersObj = await fetchBanners();
@@ -402,6 +407,8 @@ export default function Admin({ onReturn }: AdminProps) {
       options.push("Computer Science");
     } else if (stream === "Biology Science") {
       options.push("Biology");
+    } else if (stream === "Both science") {
+      options.push("Computer Science", "Biology");
     }
     if (includeMicrobit) {
       options.push("Microbit - Onam Exam", "Microbit - Christmas Exam", "Microbit - Annual Exam");
@@ -453,6 +460,12 @@ export default function Admin({ onReturn }: AdminProps) {
         return cleanUrl.substring(0, 11);
       }
     }
+
+    // 6. Direct HTTP/HTTPS Video URL fallback (e.g. direct mp4 or custom URL)
+    if (/^https?:\/\//i.test(cleanUrl)) {
+      return cleanUrl;
+    }
+
     return null;
   };
 
@@ -465,7 +478,7 @@ export default function Admin({ onReturn }: AdminProps) {
 
     const videoIdToSave = extractYouTubeId(videoLink);
     if (!videoIdToSave) {
-      alert("Invalid YouTube Link. Please provide a valid YouTube URL (e.g., https://youtu.be/VIDEO_ID or a valid 11-character Video ID).");
+      alert("Invalid Video Source. Please provide a valid YouTube URL, standard video URL (e.g. mp4), or non-YouTube video link.");
       return;
     }
 
@@ -478,7 +491,7 @@ export default function Admin({ onReturn }: AdminProps) {
         videoSubject,
         videoChapter,
         videoPart,
-        videoIdToSave
+        videoLink
       );
 
       setVideoTitle("");
@@ -541,7 +554,7 @@ export default function Admin({ onReturn }: AdminProps) {
     
     const videoIdToSave = extractYouTubeId(editingVideo.videoUrl || "");
     if (!videoIdToSave) {
-      alert("Invalid YouTube Link. Please provide a valid URL.");
+      alert("Invalid Video Source. Please provide a valid YouTube URL, standard video URL (e.g. mp4), or non-YouTube video link.");
       return;
     }
 
@@ -554,7 +567,7 @@ export default function Admin({ onReturn }: AdminProps) {
         subject: editingVideo.subject,
         chapter: editingVideo.chapter,
         part: editingVideo.part,
-        videoUrl: videoIdToSave
+        videoUrl: editingVideo.videoUrl
       });
       triggerToast("Video updated successfully!");
       setEditingVideo(null);
@@ -1594,6 +1607,7 @@ service cloud.firestore {
                     >
                       <option value="Computer Science">Computer Science</option>
                       <option value="Biology Science">Biology Science</option>
+                      <option value="Both science">Both Science</option>
                     </select>
                   </div>
 
@@ -1754,6 +1768,7 @@ service cloud.firestore {
                     >
                       <option value="Computer Science">Computer Science</option>
                       <option value="Biology Science">Biology Science</option>
+                      <option value="Both science">Both Science</option>
                     </select>
                   </div>
 
@@ -1889,6 +1904,7 @@ service cloud.firestore {
                     >
                       <option value="Computer Science">Computer Science</option>
                       <option value="Biology Science">Biology Science</option>
+                      <option value="Both science">Both Science</option>
                     </select>
                   </div>
 
@@ -2010,6 +2026,7 @@ service cloud.firestore {
                     >
                       <option value="Computer Science">Computer Science</option>
                       <option value="Biology Science">Biology</option>
+                      <option value="Both science">Both Science</option>
                     </select>
                   </div>
                 </div>
@@ -2054,6 +2071,7 @@ service cloud.firestore {
                                  }} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none">
                                    <option value="Computer Science">Computer Science</option>
                                    <option value="Biology Science">Biology Science</option>
+                                   <option value="Both science">Both Science</option>
                                  </select>
                               </div>
                               <div>
@@ -2156,6 +2174,7 @@ service cloud.firestore {
                     >
                       <option value="Computer Science">Computer Science</option>
                       <option value="Biology Science">Biology</option>
+                      <option value="Both science">Both Science</option>
                     </select>
                   </div>
                 </div>
@@ -2197,6 +2216,7 @@ service cloud.firestore {
                                    }} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none">
                                      <option value="Computer Science">Computer Science</option>
                                      <option value="Biology Science">Biology Science</option>
+                                     <option value="Both science">Both Science</option>
                                    </select>
                                 </div>
                                 <div>
@@ -2246,7 +2266,12 @@ service cloud.firestore {
                             </div>
                             <div className="flex gap-2 w-full sm:w-auto justify-end">
                               <button
-                                onClick={() => setEditingVideo(video)}
+                                onClick={() => {
+                                  const formattedUrl = video.videoUrl && !video.videoUrl.startsWith("http") && video.videoUrl.length === 11
+                                    ? `https://www.youtube.com/watch?v=${video.videoUrl}`
+                                    : video.videoUrl;
+                                  setEditingVideo({ ...video, videoUrl: formattedUrl });
+                                }}
                                 className="p-2 sm:px-4 sm:py-2 flex items-center justify-center rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 transition-colors font-semibold"
                               >
                                 <Pencil className="w-4 h-4 sm:mr-2" />
@@ -2316,6 +2341,7 @@ service cloud.firestore {
                   >
                     <option value="Computer Science">Computer Science</option>
                     <option value="Biology Science">Biology Science</option>
+                    <option value="Both science">Both Science</option>
                   </select>
                 </div>
               </div>
@@ -2357,6 +2383,7 @@ service cloud.firestore {
                                  }} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white outline-none">
                                    <option value="Computer Science">Computer Science</option>
                                    <option value="Biology Science">Biology Science</option>
+                                   <option value="Both science">Both Science</option>
                                  </select>
                               </div>
                               <div>
@@ -2538,6 +2565,10 @@ service cloud.firestore {
                     .filter((s) => s.status === "approved")
                     .map((stud) => {
                       // Pre-find matching subscription state
+                      const studentSub = subscriptionsList.find((s) => s.studentId === stud.uid);
+                      const currentStatus = studentSub ? studentSub.status : "inactive";
+                      const isSubActive = currentStatus === "active";
+
                       return (
                         <div
                           key={stud.uid}
@@ -2557,9 +2588,20 @@ service cloud.firestore {
                               <span className="block text-slate-900 dark:text-white font-bold">
                                 {stud.name}
                               </span>
-                              <span className="block text-indigo-300 text-[10.5px] font-semibold">
-                                {stud.class} {stud.stream}
-                              </span>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-indigo-300 text-[10.5px] font-semibold">
+                                  {stud.class} {stud.stream}
+                                </span>
+                                <span
+                                  className={`px-1.5 py-0.2 rounded text-[9px] font-bold tracking-wider uppercase ${
+                                    isSubActive
+                                      ? "bg-green-500/10 border border-green-500/20 text-green-400"
+                                      : "bg-rose-500/10 border border-rose-500/20 text-rose-400"
+                                  }`}
+                                >
+                                  {currentStatus}
+                                </span>
+                              </div>
                             </div>
                           </div>
 
@@ -2571,16 +2613,14 @@ service cloud.firestore {
 
                             <button
                               id={`toggle-sub-btn-${stud.uid}`}
-                              onClick={
-                                () =>
-                                  handleToggleSub(
-                                    stud.uid,
-                                    "active",
-                                  ) /* Simple simulator toggle uses local matching */
-                              }
-                              className="p-1 px-3 rounded-xl bg-indigo-600/10 border border-indigo-600/20 text-indigo-300 font-sans font-bold text-xxs tracking-wider hover:bg-indigo-600/20 transition-all cursor-pointer"
+                              onClick={() => handleToggleSub(stud.uid, currentStatus)}
+                              className={`p-1 px-3 rounded-xl border font-sans font-bold text-xxs tracking-wider transition-all cursor-pointer ${
+                                isSubActive
+                                  ? "bg-rose-500/15 border-rose-500/20 text-rose-300 hover:bg-rose-500/25"
+                                  : "bg-green-500/15 border-green-500/20 text-green-300 hover:bg-green-500/25"
+                              }`}
                             >
-                              Toggle Subscription Status
+                              {isSubActive ? "Deactivate Access" : "Activate Access"}
                             </button>
                           </div>
                         </div>

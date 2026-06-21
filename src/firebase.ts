@@ -447,7 +447,7 @@ export async function fetchPDFs(
     return pdfs.filter(
       (pdf) =>
         pdf.class === classRoom &&
-        pdf.stream === stream &&
+        (pdf.stream === stream || pdf.stream === "Both science") &&
         (!subject || pdf.subject.toLowerCase() === subject.toLowerCase()),
     );
   }
@@ -458,21 +458,21 @@ export async function fetchPDFs(
       q = query(
         collection(db, "pdfs"),
         where("class", "==", classRoom),
-        where("stream", "==", stream),
         where("subject", "==", subject),
       );
     } else {
       q = query(
         collection(db, "pdfs"),
         where("class", "==", classRoom),
-        where("stream", "==", stream),
       );
     }
     const snap = await getDocs(q);
     const results: PdfAsset[] = [];
     snap.forEach((doc) => {
       const data = doc.data() as Record<string, any>;
-      results.push({ id: doc.id, ...data } as PdfAsset);
+      if (data.stream === stream || data.stream === "Both science") {
+        results.push({ id: doc.id, ...data } as PdfAsset);
+      }
     });
     return results;
   } catch (err) {
@@ -492,7 +492,7 @@ export async function fetchLibraryPDFs(
   if (useLocalMock) {
     const pdfs = getLocalData<PdfAsset[]>("pdfs", []);
     return pdfs.filter(
-      (pdf) => pdf.class === classRoom && pdf.stream === stream,
+      (pdf) => pdf.class === classRoom && (pdf.stream === stream || pdf.stream === "Both science"),
     );
   }
 
@@ -500,13 +500,14 @@ export async function fetchLibraryPDFs(
     const q = query(
       collection(db, "pdfs"),
       where("class", "==", classRoom),
-      where("stream", "==", stream),
     );
     const snap = await getDocs(q);
     const results: PdfAsset[] = [];
     snap.forEach((doc) => {
       const data = doc.data() as Record<string, any>;
-      results.push({ id: doc.id, ...data } as PdfAsset);
+      if (data.stream === stream || data.stream === "Both science") {
+        results.push({ id: doc.id, ...data } as PdfAsset);
+      }
     });
     return results;
   } catch (err) {
@@ -525,7 +526,7 @@ export async function fetchVideos(
     return videos.filter(
       (v) =>
         v.class === classRoom &&
-        v.stream === stream &&
+        (v.stream === stream || v.stream === "Both science") &&
         (!subject || v.subject.toLowerCase() === subject.toLowerCase()),
     );
   }
@@ -536,21 +537,21 @@ export async function fetchVideos(
       q = query(
         collection(db, "videos"),
         where("class", "==", classRoom),
-        where("stream", "==", stream),
         where("subject", "==", subject),
       );
     } else {
       q = query(
         collection(db, "videos"),
         where("class", "==", classRoom),
-        where("stream", "==", stream),
       );
     }
     const snap = await getDocs(q);
     const results: any[] = [];
     snap.forEach((doc) => {
       const data = doc.data() as Record<string, any>;
-      results.push({ id: doc.id, ...data });
+      if (data.stream === stream || data.stream === "Both science") {
+        results.push({ id: doc.id, ...data });
+      }
     });
     return results;
   } catch (err) {
@@ -571,7 +572,7 @@ export async function fetchMicrobits(
     return mbits.filter(
       (m) =>
         m.class === classRoom &&
-        m.stream === stream &&
+        (m.stream === stream || m.stream === "Both science") &&
         (!subject || 
          (m.subject || "").toLowerCase().trim().replace(/^microbit\s*-\s*/i, "") === cleanSub),
     );
@@ -581,14 +582,15 @@ export async function fetchMicrobits(
     const q = query(
       collection(db, "microbits"),
       where("class", "==", classRoom),
-      where("stream", "==", stream),
     );
     const snap = await getDocs(q);
     const results: any[] = [];
     snap.forEach((doc) => {
       const data = doc.data() as Record<string, any>;
       const itemSubject = (data.subject || "").toLowerCase().trim().replace(/^microbit\s*-\s*/i, "");
-      if (!subject || itemSubject === cleanSub) {
+      const matchesSubject = !subject || itemSubject === cleanSub;
+      const matchesStream = data.stream === stream || data.stream === "Both science";
+      if (matchesSubject && matchesStream) {
         results.push({ id: doc.id, ...data });
       }
     });
@@ -779,7 +781,7 @@ export async function adminRejectStudent(uid: string): Promise<void> {
 export async function adminUploadPDFFile(
   title: string,
   classRoom: "+1" | "+2",
-  stream: "Computer Science" | "Biology Science",
+  stream: "Computer Science" | "Biology Science" | "Both science",
   subject: string,
   pdfFile: File
 ): Promise<void> {
@@ -812,7 +814,7 @@ export async function adminUploadPDFFile(
 export async function adminUploadPDF(
   title: string,
   classRoom: "+1" | "+2",
-  stream: "Computer Science" | "Biology Science",
+  stream: "Computer Science" | "Biology Science" | "Both science",
   subject: string,
   pdfLink: string,
 ): Promise<void> {
@@ -934,7 +936,7 @@ export async function adminDeletePDF(
 export async function adminUploadMicrobitFile(
   title: string,
   classRoom: "+1" | "+2",
-  stream: "Computer Science" | "Biology Science",
+  stream: "Computer Science" | "Biology Science" | "Both science",
   subject: string,
   file: File
 ): Promise<void> {
@@ -968,7 +970,7 @@ export async function adminUploadMicrobitFile(
 export async function adminUploadMicrobit(
   title: string,
   classRoom: "+1" | "+2",
-  stream: "Computer Science" | "Biology Science",
+  stream: "Computer Science" | "Biology Science" | "Both science",
   subject: string,
   fileLink: string,
 ): Promise<void> {
@@ -1012,7 +1014,7 @@ export async function adminUploadMicrobit(
 export async function adminUploadVideo(
   title: string,
   classRoom: "+1" | "+2",
-  stream: "Computer Science" | "Biology Science",
+  stream: "Computer Science" | "Biology Science" | "Both science",
   subject: string,
   chapter: string,
   part: number,
@@ -1062,7 +1064,7 @@ export async function adminUpdateVideo(
   updates: Partial<{
     title: string;
     class: "+1" | "+2";
-    stream: "Computer Science" | "Biology Science";
+    stream: "Computer Science" | "Biology Science" | "Both science";
     subject: string;
     chapter: string;
     part: number;
@@ -1126,7 +1128,7 @@ export async function adminUpdateMicrobit(
   updates: Partial<{
     title: string;
     class: "+1" | "+2";
-    stream: "Computer Science" | "Biology Science";
+    stream: "Computer Science" | "Biology Science" | "Both science";
     subject: string;
     fileUrl: string;
     fileName: string;
@@ -1265,6 +1267,21 @@ export async function adminToggleSubscription(
     if (err.message && err.message.includes("permission"))
       throw new Error("Toggle Denied: Missing Admin Privileges.");
     throw err;
+  }
+}
+
+export async function fetchAllSubscriptions(): Promise<Subscription[]> {
+  if (useLocalMock) {
+    return getLocalData<Subscription[]>("subscriptions", []);
+  }
+  try {
+    const snap = await getDocs(collection(db, "subscriptions"));
+    const list: Subscription[] = [];
+    snap.forEach((doc) => list.push(doc.data() as Subscription));
+    return list;
+  } catch (err) {
+    console.error("fetchAllSubscriptions failed:", err);
+    return [];
   }
 }
 

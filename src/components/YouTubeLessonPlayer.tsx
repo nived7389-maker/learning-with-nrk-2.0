@@ -97,16 +97,158 @@ export default function YouTubeLessonPlayer({
   const [currentQuality, setCurrentQuality] = useState('auto');
   
   const playerRef = useRef<any>(null);
+  const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const progressIntervalRef = useRef<any>(null);
   const loadingTimeoutRef = useRef<any>(null);
   const controlsTimeoutRef = useRef<any>(null);
+
+  // Gesture Controls States & Refs
+  const [isHolding2x, setIsHolding2x] = useState(false);
+  const [doubleTapFeedback, setDoubleTapFeedback] = useState<"forward" | "backward" | null>(null);
+
+  const preHoldRateRef = useRef<number>(1);
+  const holdTimeoutRef = useRef<any>(null);
+  const is2xHoldingRef = useRef<boolean>(false);
+  const lastTapTimeRef = useRef<number>(0);
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  const triggerDoubleTapFeedback = (direction: "forward" | "backward") => {
+    setDoubleTapFeedback(direction);
+    setTimeout(() => {
+      setDoubleTapFeedback(null);
+    }, 800);
+  };
+
+  const handlePointerStart = (clientX: number) => {
+    if (!overlayRef.current) return;
+    const rect = overlayRef.current.getBoundingClientRect();
+    const isLeftHalf = (clientX - rect.left) < rect.width / 2;
+
+    const now = Date.now();
+    const timeSinceLastTap = now - lastTapTimeRef.current;
+
+    if (timeSinceLastTap < 300) {
+      if (holdTimeoutRef.current) {
+        clearTimeout(holdTimeoutRef.current);
+        holdTimeoutRef.current = null;
+      }
+      
+      if (isLeftHalf) {
+        skip(-10);
+        triggerDoubleTapFeedback("backward");
+      } else {
+        skip(10);
+        triggerDoubleTapFeedback("forward");
+      }
+      lastTapTimeRef.current = 0;
+      return;
+    }
+
+    lastTapTimeRef.current = now;
+
+    if (holdTimeoutRef.current) clearTimeout(holdTimeoutRef.current);
+    holdTimeoutRef.current = setTimeout(() => {
+      if (!is2xHoldingRef.current && isPlaying) {
+        preHoldRateRef.current = playbackRate;
+        is2xHoldingRef.current = true;
+        setIsHolding2x(true);
+        if (isDirectVideo) {
+          if (videoElementRef.current) {
+            videoElementRef.current.playbackRate = 2;
+          }
+        } else {
+          if (playerRef.current && typeof playerRef.current.setPlaybackRate === 'function') {
+            playerRef.current.setPlaybackRate(2);
+          }
+        }
+      }
+    }, 350);
+  };
+
+  const handlePointerEnd = (clientX: number) => {
+    if (holdTimeoutRef.current) {
+      clearTimeout(holdTimeoutRef.current);
+      holdTimeoutRef.current = null;
+    }
+
+    if (is2xHoldingRef.current) {
+      is2xHoldingRef.current = false;
+      setIsHolding2x(false);
+      const originalRate = preHoldRateRef.current || 1;
+      if (isDirectVideo) {
+        if (videoElementRef.current) {
+          videoElementRef.current.playbackRate = originalRate;
+        }
+      } else {
+        if (playerRef.current && typeof playerRef.current.setPlaybackRate === 'function') {
+          playerRef.current.setPlaybackRate(originalRate);
+        }
+      }
+      return;
+    }
+
+    const pressDuration = lastTapTimeRef.current ? Date.now() - lastTapTimeRef.current : 0;
+    if (pressDuration < 350) {
+      setShowControls((prev) => {
+        const nextState = !prev;
+        if (nextState && isPlaying) {
+          hideControlsWithDelay();
+        }
+        return nextState;
+      });
+    }
+  };
+
+  const onMouseDownOverlay = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    handlePointerStart(e.clientX);
+  };
+
+  const onMouseUpOverlay = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    handlePointerEnd(e.clientX);
+  };
+
+  const onMouseLeaveOverlay = () => {
+    if (is2xHoldingRef.current) {
+      is2xHoldingRef.current = false;
+      setIsHolding2x(false);
+      const originalRate = preHoldRateRef.current || 1;
+      if (isDirectVideo) {
+        if (videoElementRef.current) {
+          videoElementRef.current.playbackRate = originalRate;
+        }
+      } else {
+        if (playerRef.current && typeof playerRef.current.setPlaybackRate === 'function') {
+          playerRef.current.setPlaybackRate(originalRate);
+        }
+      }
+    }
+    if (holdTimeoutRef.current) {
+      clearTimeout(holdTimeoutRef.current);
+      holdTimeoutRef.current = null;
+    }
+  };
+
+  const onTouchStartOverlay = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches && e.touches.length > 0) {
+      handlePointerStart(e.touches[0].clientX);
+    }
+  };
+
+  const onTouchEndOverlay = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.changedTouches && e.changedTouches.length > 0) {
+      handlePointerEnd(e.changedTouches[0].clientX);
+    }
+  };
   
   const videoId = extractYouTubeId(videoUrl);
+  const isDirectVideo = !!videoUrl && (videoUrl.startsWith("http://") || videoUrl.startsWith("https://")) && !videoId;
   const validVideoId = videoId || "";
   
-  const storageKey = `yt_progress_${lessonId}_${chapterId}_${validVideoId}`;
+  const storageKey = `yt_progress_${lessonId}_${chapterId}_${validVideoId || encodeURIComponent(videoUrl)}`;
 
   const [completedTriggered, setCompletedTriggered] = useState(false);
   const lastSavedTime = useRef<number>(0);
@@ -145,7 +287,65 @@ export default function YouTubeLessonPlayer({
     };
   }, []);
 
+  const onVideoTimeUpdate = () => {
+    if (!videoElementRef.current) return;
+    const playedSeconds = videoElementRef.current.currentTime;
+    const dur = videoElementRef.current.duration || 0;
+    
+    setCurrentTime(playedSeconds);
+    
+    if (dur > 0) {
+      const playedFrac = playedSeconds / dur;
+      if (onProgressUpdate) onProgressUpdate(playedSeconds);
+      if (videoUrl) updateWatchProgress(videoUrl, lessonId, chapterId, playedSeconds, dur);
+  
+      if (playedFrac >= 0.9 && !completedTriggered) {
+        setCompletedTriggered(true);
+        if (videoUrl) markVideoCompleted(videoUrl, lessonId, chapterId);
+        if (onVideoComplete) onVideoComplete();
+      }
+    }
+
+    if (Math.abs(playedSeconds - lastSavedTime.current) >= 5) {
+      try {
+        localStorage.setItem(storageKey, playedSeconds.toString());
+        lastSavedTime.current = playedSeconds;
+      } catch (err) {}
+    }
+  };
+
+  const onVideoDurationChange = () => {
+    if (videoElementRef.current) {
+      setDuration(videoElementRef.current.duration || 0);
+    }
+  };
+
   useEffect(() => {
+    setIsReady(false);
+    setHasError(false);
+    setIsTimeout(false);
+    setCompletedTriggered(false);
+
+    if (isDirectVideo) {
+      setIsReady(true);
+      setHasError(false);
+      setIsTimeout(false);
+      
+      const savedProgressStr = localStorage.getItem(storageKey);
+      if (savedProgressStr && videoElementRef.current) {
+        const savedSeconds = parseFloat(savedProgressStr);
+        if (savedSeconds > 0) {
+          videoElementRef.current.currentTime = savedSeconds;
+        }
+      }
+      setTimeout(() => {
+        if (videoElementRef.current) {
+          videoElementRef.current.play().catch(err => console.log("Direct video autoplay restriction:", err));
+        }
+      }, 50);
+      return;
+    }
+
     if (!validVideoId) {
       setHasError(true);
       setErrorMessage("Invalid YouTube Link. Cannot extract Video ID.");
@@ -173,7 +373,7 @@ export default function YouTubeLessonPlayer({
           modestbranding: 1,
           iv_load_policy: 3,
           cc_load_policy: 0,
-          autoplay: 0,
+          autoplay: 1,
           origin: window.location.origin
         },
         events: {
@@ -212,7 +412,7 @@ export default function YouTubeLessonPlayer({
       if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     };
-  }, [validVideoId]);
+  }, [validVideoId, isDirectVideo, videoUrl]);
 
   const onPlayerReady = (event: any) => {
     setIsReady(true);
@@ -235,6 +435,11 @@ export default function YouTubeLessonPlayer({
         setQualityOptions(levels);
       }
     } catch (err) {}
+
+    // Auto-start playback on mount ready condition
+    try {
+      event.target.playVideo();
+    } catch (e) {}
   };
 
   const onPlayerError = (event: any) => {
@@ -299,7 +504,7 @@ export default function YouTubeLessonPlayer({
   const handleEnded = () => {
     if (!completedTriggered) {
       setCompletedTriggered(true);
-      if (validVideoId) markVideoCompleted(validVideoId, lessonId, chapterId);
+      if (validVideoId || videoUrl) markVideoCompleted(validVideoId || videoUrl, lessonId, chapterId);
       if (onVideoComplete) onVideoComplete();
     }
     try {
@@ -308,16 +513,31 @@ export default function YouTubeLessonPlayer({
   };
 
   useEffect(() => {
-    if (isClosing && playerRef.current && typeof playerRef.current.pauseVideo === 'function') {
-      playerRef.current.pauseVideo();
+    if (isClosing) {
+      if (isDirectVideo && videoElementRef.current) {
+        videoElementRef.current.pause();
+      } else if (playerRef.current && typeof playerRef.current.pauseVideo === 'function') {
+        playerRef.current.pauseVideo();
+      }
     }
-  }, [isClosing]);
+  }, [isClosing, isDirectVideo]);
 
   // Interaction Handlers
   const togglePlay = () => {
-    if (!playerRef.current) return;
-    if (isPlaying) playerRef.current.pauseVideo();
-    else playerRef.current.playVideo();
+    if (isDirectVideo) {
+      if (!videoElementRef.current) return;
+      if (isPlaying) {
+        videoElementRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        videoElementRef.current.play().catch(err => console.error(err));
+        setIsPlaying(true);
+      }
+    } else {
+      if (!playerRef.current) return;
+      if (isPlaying) playerRef.current.pauseVideo();
+      else playerRef.current.playVideo();
+    }
   };
 
   const handleMouseMove = () => {
@@ -336,51 +556,95 @@ export default function YouTubeLessonPlayer({
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
     setCurrentTime(time);
-    if (playerRef.current) {
-      playerRef.current.seekTo(time, true);
+    if (isDirectVideo) {
+      if (videoElementRef.current) {
+        videoElementRef.current.currentTime = time;
+      }
+    } else {
+      if (playerRef.current) {
+        playerRef.current.seekTo(time, true);
+      }
     }
   };
 
   const skip = (seconds: number) => {
-    if (playerRef.current) {
-      const newTime = Math.max(0, Math.min(currentTime + seconds, duration));
-      playerRef.current.seekTo(newTime, true);
-      setCurrentTime(newTime);
+    const newTime = Math.max(0, Math.min(currentTime + seconds, duration));
+    setCurrentTime(newTime);
+    if (isDirectVideo) {
+      if (videoElementRef.current) {
+        videoElementRef.current.currentTime = newTime;
+      }
+    } else {
+      if (playerRef.current) {
+        playerRef.current.seekTo(newTime, true);
+      }
     }
   };
 
   const toggleMute = () => {
-    if (!playerRef.current) return;
-    if (isMuted) {
-      playerRef.current.unMute();
-      setIsMuted(false);
-      playerRef.current.setVolume(volume);
+    if (isDirectVideo) {
+      if (videoElementRef.current) {
+        const nextMute = !isMuted;
+        videoElementRef.current.muted = nextMute;
+        setIsMuted(nextMute);
+        if (!nextMute) {
+          videoElementRef.current.volume = volume / 100;
+        }
+      }
     } else {
-      playerRef.current.mute();
-      setIsMuted(true);
-    }
-  };
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const vol = parseFloat(e.target.value);
-    setVolume(vol);
-    if (playerRef.current) {
-      playerRef.current.setVolume(vol);
-      if (vol > 0 && isMuted) {
+      if (!playerRef.current) return;
+      if (isMuted) {
         playerRef.current.unMute();
         setIsMuted(false);
-      }
-      if (vol === 0) {
+        playerRef.current.setVolume(volume);
+      } else {
         playerRef.current.mute();
         setIsMuted(true);
       }
     }
   };
 
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const vol = parseFloat(e.target.value);
+    setVolume(vol);
+    if (isDirectVideo) {
+      if (videoElementRef.current) {
+        videoElementRef.current.volume = vol / 100;
+        if (vol > 0 && isMuted) {
+          videoElementRef.current.muted = false;
+          setIsMuted(false);
+        }
+        if (vol === 0) {
+          videoElementRef.current.muted = true;
+          setIsMuted(true);
+        }
+      }
+    } else {
+      if (playerRef.current) {
+        playerRef.current.setVolume(vol);
+        if (vol > 0 && isMuted) {
+          playerRef.current.unMute();
+          setIsMuted(false);
+        }
+        if (vol === 0) {
+          playerRef.current.mute();
+          setIsMuted(true);
+        }
+      }
+    }
+  };
+
   const changePlaybackRate = (rate: number) => {
     setPlaybackRate(rate);
-    if (playerRef.current) {
-      playerRef.current.setPlaybackRate(rate);
+    preHoldRateRef.current = rate;
+    if (isDirectVideo) {
+      if (videoElementRef.current) {
+        videoElementRef.current.playbackRate = rate;
+      }
+    } else {
+      if (playerRef.current) {
+        playerRef.current.setPlaybackRate(rate);
+      }
     }
     setShowSettings(false);
   };
@@ -485,17 +749,69 @@ export default function YouTubeLessonPlayer({
           </div>
         )}
 
-        {/* Frame Container - Pointer events none to block all interactions with yt elements */}
+        {/* Frame Container or Native Video Player */}
+        {isDirectVideo ? (
+          <video
+            ref={videoElementRef}
+            src={videoUrl}
+            className="absolute inset-0 w-full h-full object-contain bg-black outline-none border-none"
+            playsInline
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+            onTimeUpdate={onVideoTimeUpdate}
+            onDurationChange={onVideoDurationChange}
+            onEnded={handleEnded}
+            onCanPlay={() => setIsReady(true)}
+            onError={() => {
+              setHasError(true);
+              setErrorMessage("Failed to play the direct video link. Please verify the URL structure and accessibility.");
+            }}
+          />
+        ) : (
+          <div 
+            ref={playerContainerRef} 
+            className="absolute inset-0 w-full h-full [&>iframe]:w-full [&>iframe]:h-full [&>iframe]:pointer-events-none border-none outline-none scale-[1.05]"
+          />
+        )}
+
+        {/* Transparent Overlay to capture gestures, custom hold actions and double-taps */}
         <div 
-          ref={playerContainerRef} 
-          className="absolute inset-0 w-full h-full [&>iframe]:w-full [&>iframe]:h-full [&>iframe]:pointer-events-none border-none outline-none scale-[1.05]"
+          ref={overlayRef}
+          className="absolute inset-0 z-10 cursor-pointer"
+          onMouseDown={onMouseDownOverlay}
+          onMouseUp={onMouseUpOverlay}
+          onMouseLeave={onMouseLeaveOverlay}
+          onTouchStart={onTouchStartOverlay}
+          onTouchEnd={onTouchEndOverlay}
         />
 
-        {/* Transparent Overlay to capture clicks (play/pause) and prevent youtube redirects */}
-        <div 
-          className="absolute inset-0 z-10 cursor-pointer"
-          onClick={togglePlay}
-        />
+        {/* 2X Speed hold overlay indicator */}
+        {isHolding2x && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[28] px-4 py-1.5 bg-black/80 backdrop-blur-md rounded-full border border-cyan-500/30 flex items-center gap-1.5 text-xs font-semibold text-cyan-400 select-none pointer-events-none shadow-lg animate-pulse">
+            <span className="w-2 h-2 bg-cyan-400 rounded-full animate-ping" />
+            <span>2X Speed Playback Active ⚡</span>
+          </div>
+        )}
+
+        {/* Double click/tap rewind visual feedback overlay */}
+        {doubleTapFeedback === "backward" && (
+          <div className="absolute left-0 top-0 bottom-0 w-1/2 bg-white/5 backdrop-blur-[1px] z-[15] flex flex-col items-center justify-center text-white pointer-events-none transition-all duration-300 rounded-l-3xl">
+            <div className="p-4 bg-black/50 rounded-full mb-2 border border-white/5 shadow-xl">
+              <Rewind className="w-8 h-8 text-cyan-400" />
+            </div>
+            <span className="text-xs font-semibold text-slate-200">Rewind 10 Secs</span>
+          </div>
+        )}
+
+        {/* Double click/tap fast-forward visual feedback overlay */}
+        {doubleTapFeedback === "forward" && (
+          <div className="absolute right-0 top-0 bottom-0 w-1/2 bg-white/5 backdrop-blur-[1px] z-[15] flex flex-col items-center justify-center text-white pointer-events-none transition-all duration-300 rounded-r-3xl">
+            <div className="p-4 bg-black/50 rounded-full mb-2 border border-white/5 shadow-xl">
+              <FastForward className="w-8 h-8 text-cyan-400" />
+            </div>
+            <span className="text-xs font-semibold text-slate-200">Forward 10 Secs</span>
+          </div>
+        )}
 
         {/* Center UI Controls Overlay */}
         <div 

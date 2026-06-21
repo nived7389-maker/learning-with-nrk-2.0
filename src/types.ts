@@ -15,7 +15,7 @@ export interface PdfAsset {
   id: string;
   title: string;
   class: "+1" | "+2";
-  stream: "Computer Science" | "Biology Science";
+  stream: "Computer Science" | "Biology Science" | "Both science";
   subject: string;
   pdfUrl: string;
   fileName: string;
@@ -26,7 +26,7 @@ export interface MicrobitAsset {
   id: string;
   title: string;
   class: "+1" | "+2" | "";
-  stream: "Computer Science" | "Biology Science" | "";
+  stream: "Computer Science" | "Biology Science" | "Both science" | "";
   subject: string;
   fileUrl: string;
   fileName: string;
@@ -37,7 +37,7 @@ export interface VideoAsset {
   id: string;
   title: string;
   class: "+1" | "+2";
-  stream: "Computer Science" | "Biology Science";
+  stream: "Computer Science" | "Biology Science" | "Both science";
   subject: string;
   chapter: string;
   part: number;

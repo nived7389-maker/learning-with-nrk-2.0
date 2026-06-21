@@ -6,7 +6,7 @@ import {
   Download, Eye, AlertCircle, Sparkles, Search, 
   ArrowLeft, FileText, CheckCircle2, ChevronRight, HelpCircle,
   Cpu, Dna, BookA, Languages, PenTool, Pi, Phone, Video,
-  Play, Pause, FastForward, Rewind, Maximize, Brain, Send
+  Play, Pause, FastForward, Rewind, Maximize, Brain, Send, ExternalLink
 } from "lucide-react";
 import { Student, PdfAsset, BannerAsset, Subscription } from "../types";
 import { fetchBanners, fetchPDFs, listenToUserSubscription, listenAppConfig, fetchMicrobits, fetchVideos } from "../firebase";
@@ -536,7 +536,7 @@ export default function Home({ student, selectedSubject, onSubjectSelect, onBack
 
               {/* 2. Video Info Card */}
               <div className="bg-white/70 dark:bg-slate-900/80 border border-slate-200 dark:border-white/5 rounded-2xl p-5 shadow-xl">
-                <div className="flex flex-wrap items-center gap-2 mb-3">
+                <div className="flex flex-wrap items-center gap-2 mb-3 border-none">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[10.5px] font-bold text-indigo-600 dark:text-indigo-400">
                     Part {viewingVideo.part || 1}
                   </span>
