@@ -25,6 +25,7 @@ export default function App() {
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showSuperCoins, setShowSuperCoins] = useState(false);
   const [appConfig, setAppConfig] = useState<any>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<string>("default");
@@ -322,6 +323,31 @@ export default function App() {
                         <span>{currentUser.class} {currentUser.stream === "Computer Science" ? "CS" : "BIO"}</span>
                       </div>
                     )}
+                    
+                    {/* Top Super Coin Header option near the refresh option */}
+                    <button
+                      id="top-super-coin-header-btn"
+                      onClick={() => {
+                        setCurrentTab("home");
+                        setSelectedSubject(null);
+                        setShowSuperCoins(true);
+                      }}
+                      className="flex items-center gap-1.5 bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-600 dark:from-amber-600 dark:to-yellow-500 hover:from-amber-300 hover:to-amber-500 text-white font-sans font-black text-[10.5px] px-2.5 py-1 rounded-full shadow-[0_3px_12px_rgba(245,158,11,0.2)] dark:shadow-[0_3px_12px_rgba(245,158,11,0.4)] border border-yellow-300 dark:border-yellow-500/40 cursor-pointer transition-all outline-none group shrink-0 active:scale-95"
+                      title="Super Coin Balance & Rewards"
+                    >
+                      <motion.div
+                        animate={{ rotateY: 360 }}
+                        transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
+                        className="w-4 h-4 rounded-full bg-yellow-100 flex items-center justify-center border border-yellow-450 text-[8px] font-black text-amber-600 shadow-inner shrink-0"
+                      >
+                        ⚡
+                      </motion.div>
+                      <span className="font-sans font-extrabold select-none tracking-wider text-[10px] pr-0.5 uppercase hidden xs:inline">Coins</span>
+                      <span className="font-mono bg-amber-950/30 px-1.5 py-0.5 rounded-full font-black text-white text-[10px]">
+                        {currentUser?.superCoins || 0}
+                      </span>
+                    </button>
+
                     <button
                       onClick={async () => {
                         if (currentUser && !isRefreshing) {
@@ -375,6 +401,8 @@ export default function App() {
                         setSelectedSubject(null);
                       }}
                       onOpenAI={() => setShowAIAssistant(true)}
+                      showSuperCoinPage={showSuperCoins}
+                      onCloseSuperCoinPage={() => setShowSuperCoins(false)}
                     />
                   )}
                   {currentTab === "video" && (

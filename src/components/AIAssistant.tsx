@@ -39,6 +39,60 @@ export default function AIAssistant({ student, onBackToHome }: AIAssistantProps)
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const [blockedTimeRemaining, setBlockedTimeRemaining] = useState<number>(0);
+  const [isBlocked, setIsBlocked] = useState<boolean>(false);
+  const [blockReason, setBlockReason] = useState<string>("");
+
+  useEffect(() => {
+    const checkBlockStatus = () => {
+      const blockedUntil = localStorage.getItem(`ai_blocked_until_${student.uid}`);
+      const reason = localStorage.getItem(`ai_blocked_reason_${student.uid}`) || "Questions from outside the lesson are not allowed.";
+      if (blockedUntil) {
+        const remaining = Math.ceil((Number(blockedUntil) - Date.now()) / 1000);
+        if (remaining > 0) {
+          setIsBlocked(true);
+          setBlockedTimeRemaining(remaining);
+          setBlockReason(reason);
+          return;
+        }
+      }
+      setIsBlocked(false);
+      setBlockedTimeRemaining(0);
+    };
+
+    checkBlockStatus();
+    const interval = setInterval(() => {
+      checkBlockStatus();
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [student.uid]);
+
+  const triggerBlock = (reason: string) => {
+    const blockUntil = Date.now() + 5 * 60 * 1000;
+    localStorage.setItem(`ai_blocked_until_${student.uid}`, blockUntil.toString());
+    localStorage.setItem(`ai_blocked_reason_${student.uid}`, reason);
+    setIsBlocked(true);
+    setBlockedTimeRemaining(300);
+    setBlockReason(reason);
+  };
+
+  const checkInappropriatePrompt = (promptText: string): string | null => {
+    const cleanPrompt = promptText.toLowerCase();
+    const badWords = [
+      "sex", "porn", "naked", "rape", "sexual abuse", "child abuse", "intercourse", 
+      "penis", "vagina", "boobs", "breasts", "erotic", "nudity", "blowjob", "fuck", 
+      "xxx", "18+", "18plus", "adult content", "clitoris", "orgasm"
+    ];
+
+    for (const word of badWords) {
+      if (cleanPrompt.includes(word)) {
+        return "Based on sexual abuse or 18-plus content questions. Access is blocked.";
+      }
+    }
+    return null;
+  };
+
   // Load history from Firebase
   useEffect(() => {
     const loadHistory = async () => {
@@ -219,7 +273,29 @@ export default function AIAssistant({ student, onBackToHome }: AIAssistantProps)
   };
 
   const sendMessage = async () => {
+    if (isBlocked) return;
     if ((!inputValue.trim() && !attachedImage) || isSending) return;
+
+    // Fast local safety check
+    const inappropriateReason = checkInappropriatePrompt(inputValue);
+    if (inappropriateReason) {
+      const userMessage: Message = {
+        role: "user",
+        text: inputValue.trim(),
+        ...(attachedImage && { image: attachedImage.url }),
+      };
+      const blockedMessages = [
+        ...messages, 
+        userMessage, 
+        { role: "model" as const, text: `⚠️ STATUS: ACCESS BLOCKED\nReason: ${inappropriateReason}\nYour access to ASTR AI has been blocked for 5 minutes due to safety policy violation.` }
+      ];
+      setMessages(blockedMessages);
+      updateChatHistory(blockedMessages);
+      setInputValue("");
+      setAttachedImage(null);
+      triggerBlock(inappropriateReason);
+      return;
+    }
 
     const userMessage: Message = {
       role: "user",
@@ -284,7 +360,25 @@ export default function AIAssistant({ student, onBackToHome }: AIAssistantProps)
         throw new Error(data.error || "Failed to respond");
       }
 
-      const finalMessages = [...newMessages, { role: "model", text: data.text } as Message];
+      const responseText = data.text || "";
+      if (responseText.includes("[VIOLATION: INAPPROPRIATE]")) {
+        const violationReason = "Based on sexual abuse or 18-plus content questions. Inappropriate content is strictly prohibited.";
+        const finalMessages = [...newMessages, { role: "model" as const, text: `⚠️ ACCESS BLOCKED: INAPPROPRIATE CONTENT\nReason: ${violationReason}\nYour access to ASTR AI is suspended for 5 minutes.` }];
+        setMessages(finalMessages);
+        updateChatHistory(finalMessages);
+        triggerBlock(violationReason);
+        return;
+      }
+      if (responseText.includes("[VIOLATION: OUTSIDE_LESSON]")) {
+        const violationReason = "Questions from outside the lesson are not allowed. Off-topic questions are restricted.";
+        const finalMessages = [...newMessages, { role: "model" as const, text: `⚠️ ACCESS BLOCKED: OUT-OF-LESSON\nReason: ${violationReason}\nYour access to ASTR AI is suspended for 5 minutes.` }];
+        setMessages(finalMessages);
+        updateChatHistory(finalMessages);
+        triggerBlock(violationReason);
+        return;
+      }
+
+      const finalMessages = [...newMessages, { role: "model", text: responseText } as Message];
       setMessages(finalMessages);
       updateChatHistory(finalMessages);
     } catch (error: any) {
@@ -338,6 +432,19 @@ export default function AIAssistant({ student, onBackToHome }: AIAssistantProps)
           <Home className="w-6 h-6" />
         </button>
       </header>
+
+      {/* Block Timer Banner */}
+      {isBlocked && (
+        <div className="relative z-20 bg-rose-500/20 border-b border-rose-500/30 text-rose-200 px-4 py-3 text-center text-xs font-semibold flex flex-col sm:flex-row items-center justify-center gap-2 animate-pulse shadow-lg shadow-rose-950/20">
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+            <span>Access Blocked! Reason: {blockReason}</span>
+          </div>
+          <span className="bg-rose-950/80 text-rose-300 font-mono text-xs px-2.5 py-1 rounded-md border border-rose-500/40 font-bold">
+            Restores in: {Math.floor(blockedTimeRemaining / 60)}:{(blockedTimeRemaining % 60).toString().padStart(2, '0')}
+          </span>
+        </div>
+      )}
 
       {/* Live Camera Overlay */}
       <AnimatePresence>
@@ -474,8 +581,9 @@ export default function AIAssistant({ student, onBackToHome }: AIAssistantProps)
               <input type="file" accept="image/*" capture="environment" className="hidden" ref={cameraInputRef} onChange={handleImageUpload} />
               
               <button 
-                onClick={() => setShowAttachMenu(!showAttachMenu)}
-                className={`w-10 h-10 rounded-full flex flex-shrink-0 items-center justify-center transition-colors cursor-pointer outline-none ${showAttachMenu ? 'bg-[#22D3EE] text-slate-900' : 'bg-white/5 text-[#22D3EE] hover:bg-[#22D3EE]/20'}`}
+                onClick={() => !isBlocked && setShowAttachMenu(!showAttachMenu)}
+                disabled={isBlocked}
+                className={`w-10 h-10 rounded-full flex flex-shrink-0 items-center justify-center transition-colors cursor-pointer outline-none ${isBlocked ? 'opacity-30 cursor-not-allowed' : showAttachMenu ? 'bg-[#22D3EE] text-slate-900' : 'bg-white/5 text-[#22D3EE] hover:bg-[#22D3EE]/20'}`}
                 title="Attach photo"
               >
                 <Plus className={`w-5 h-5 transition-transform duration-300 ${showAttachMenu ? 'rotate-45' : ''}`} />
@@ -488,13 +596,14 @@ export default function AIAssistant({ student, onBackToHome }: AIAssistantProps)
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') sendMessage();
                 }}
-                placeholder="Ask here" 
-                className="flex-1 bg-transparent border-none outline-none text-white placeholder-white/40 text-base"
+                disabled={isBlocked}
+                placeholder={isBlocked ? "AI Assist Blocked..." : "Ask here"} 
+                className={`flex-1 bg-transparent border-none outline-none text-white placeholder-white/40 text-base ${isBlocked ? 'opacity-40 cursor-not-allowed' : ''}`}
               />
               
               <button 
                 onClick={sendMessage}
-                disabled={isSending || (!inputValue.trim() && !attachedImage)}
+                disabled={isSending || isBlocked || (!inputValue.trim() && !attachedImage)}
                 className="w-10 h-10 rounded-full bg-[#22D3EE] flex flex-shrink-0 items-center justify-center text-slate-900 hover:bg-[#22D3EE]/90 disabled:opacity-50 transition-colors cursor-pointer outline-none"
               >
                 <Send className="w-4 h-4 ml-0.5" />
@@ -542,6 +651,24 @@ export default function AIAssistant({ student, onBackToHome }: AIAssistantProps)
                   <Plus className="w-4 h-4" />
                   New Chat
                 </button>
+              </div>
+
+              {/* Safety Option Requirement */}
+              <div className="px-4 py-3 border-t border-b border-white/5 bg-[#0C152B]">
+                <h4 className="text-[10px] font-mono uppercase tracking-wider text-cyan-400 mb-2">Safety Lock Options</h4>
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-semibold text-slate-200">Lesson Scope Filter</span>
+                    <span className="text-[9px] text-slate-400">Enforces lesson-only safety policy</span>
+                  </div>
+                  <div className="relative inline-flex items-center">
+                    <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[9px] px-2 py-0.5 rounded-full font-mono font-medium">ACTIVE</span>
+                  </div>
+                </div>
+                <p className="text-[9px] text-slate-400 mt-2 leading-normal">
+                  - Questions outside the lesson syllabus are restricted.<br/>
+                  - Inappropriate (18+/sexual abuse) queries block access for 5 mins.
+                </p>
               </div>
 
               <div className="flex-1 overflow-y-auto px-2 pb-4">

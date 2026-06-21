@@ -112,5 +112,12 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && request.auth.uid == adminId; // Allow users to make themselves an admin for preview purposes
     }
+
+    // Feedbacks collection rules
+    match /feedbacks/{feedbackId} {
+      allow list, get: if isAdmin();
+      allow create: if isApprovedStudent() && request.resource.data.studentId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
   }
 }

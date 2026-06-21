@@ -234,23 +234,8 @@ export default function Settings({ student, onLogout, onProfileUpdate }: Setting
                     <HelpCircle className="w-5 h-5 text-indigo-500" />
                     <span>Student Instructions</span>
                   </h3>
-                  <div className="space-y-4 text-xs font-sans text-slate-700 dark:text-slate-300">
-                    <div className="space-y-1">
-                      <h4 className="font-bold text-slate-900 dark:text-white">1. Two-in-One Live Doubt Clearance</h4>
-                      <p className="leading-relaxed">Under any playing video lesson, scroll down to access Astr AI. Ask complex doubts, translate explanations to Malayalam, summarize main points, or generate custom multiple choice questions instantly.</p>
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="font-bold text-slate-900 dark:text-white">2. Study Vault & Textbooks</h4>
-                      <p className="leading-relaxed">Explore chapters lists, select PDF notes, or view curriculum guides for Physics, Chemistry, Biology, and Computer Science streams.</p>
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="font-bold text-slate-900 dark:text-white">3. Premium Admission Access</h4>
-                      <p className="leading-relaxed">Only verified and subscribed students have full database notes clearance. If your profile status is pending, contact HSE Admission office via Helpdesk.</p>
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="font-bold text-slate-900 dark:text-white">4. Support & Offline Assistance</h4>
-                      <p className="leading-relaxed">Call 8848198680 anytime for enrollment renewals, payment approvals, or technical assistance with the application.</p>
-                    </div>
+                  <div className="text-xs text-slate-700 dark:text-slate-300 font-sans whitespace-pre-wrap leading-relaxed">
+                    {appConfig?.studentInstructions || `1. Two-in-One Live Doubt Clearance\nUnder any playing video lesson, scroll down to access Astr AI. Ask complex doubts, translate explanations to Malayalam, summarize main points, or generate custom multiple choice questions instantly.\n\n2. Study Vault & Textbooks\nExplore chapters lists, select PDF notes, or view curriculum guides for Physics, Chemistry, Biology, and Computer Science streams.\n\n3. Premium Admission Access\nOnly verified and subscribed students have full database notes clearance. If your profile status is pending, contact HSE Admission office via Helpdesk.\n\n4. Support & Offline Assistance\nCall 8848198680 anytime for enrollment renewals, payment approvals, or technical assistance with the application.`}
                   </div>
                 </div>
               )}
@@ -392,64 +377,72 @@ export default function Settings({ student, onLogout, onProfileUpdate }: Setting
         {/* Primary Settings Menu Cells */}
         <div id="settings-cells-bundle" className="p-3.5 rounded-3xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 divide-y divide-black/5 dark:divide-white/5">
           {/* Item 1: My Account */}
-          <button
-            id="cell-my-account-btn"
-            onClick={() => setActiveTabModal("My Account")}
-            className="flex items-center justify-between w-full py-4 px-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors outline-none cursor-pointer"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="w-8 h-8 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400">
-                <User className="w-4 h-4" />
+          {appConfig?.enableAccounts !== false && (
+            <button
+              id="cell-my-account-btn"
+              onClick={() => setActiveTabModal("My Account")}
+              className="flex items-center justify-between w-full py-4 px-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors outline-none cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-8 h-8 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400">
+                  <User className="w-4 h-4" />
+                </div>
+                <span className="font-sans font-semibold text-xs text-slate-900 dark:text-slate-200">My Account</span>
               </div>
-              <span className="font-sans font-semibold text-xs text-slate-900 dark:text-slate-200">My Account</span>
-            </div>
-            <ChevronRight className="w-4 h-4 text-slate-500" />
-          </button>
+              <ChevronRight className="w-4 h-4 text-slate-500" />
+            </button>
+          )}
 
           {/* Item 2: Subscriptions */}
-          <button
-            id="cell-subscriptions-btn"
-            onClick={() => setActiveTabModal("Subscriptions")}
-            className="flex items-center justify-between w-full py-4 px-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors outline-none cursor-pointer"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-                <CreditCard className="w-4 h-4" />
+          {appConfig?.enableSubscriptions !== false && (
+            <button
+              id="cell-subscriptions-btn"
+              onClick={() => setActiveTabModal("Subscriptions")}
+              className="flex items-center justify-between w-full py-4 px-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors outline-none cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                  <CreditCard className="w-4 h-4" />
+                </div>
+                <span className="font-sans font-semibold text-xs text-slate-900 dark:text-slate-200">Subscriptions</span>
               </div>
-              <span className="font-sans font-semibold text-xs text-slate-900 dark:text-slate-200">Subscriptions</span>
-            </div>
-            <ChevronRight className="w-4 h-4 text-slate-500" />
-          </button>
+              <ChevronRight className="w-4 h-4 text-slate-500" />
+            </button>
+          )}
 
           {/* Item 3: Student Instructions */}
-          <button
-            id="cell-student-instructions-btn"
-            onClick={() => setActiveTabModal("Student Instructions")}
-            className="flex items-center justify-between w-full py-4 px-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors outline-none cursor-pointer"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-                <HelpCircle className="w-4 h-4" />
+          {appConfig?.enableInstructions !== false && (
+            <button
+              id="cell-student-instructions-btn"
+              onClick={() => setActiveTabModal("Student Instructions")}
+              className="flex items-center justify-between w-full py-4 px-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors outline-none cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                  <HelpCircle className="w-4 h-4" />
+                </div>
+                <span className="font-sans font-semibold text-xs text-slate-900 dark:text-slate-200">Student Instructions</span>
               </div>
-              <span className="font-sans font-semibold text-xs text-slate-900 dark:text-slate-200">Student Instructions</span>
-            </div>
-            <ChevronRight className="w-4 h-4 text-slate-500" />
-          </button>
+              <ChevronRight className="w-4 h-4 text-slate-500" />
+            </button>
+          )}
 
           {/* Item 4: Preferences */}
-          <button
-            id="cell-preferences-btn"
-            onClick={() => setActiveTabModal("Preferences")}
-            className="flex items-center justify-between w-full py-4 px-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors outline-none cursor-pointer"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                <Sliders className="w-4 h-4" />
+          {appConfig?.enablePreferences !== false && (
+            <button
+              id="cell-preferences-btn"
+              onClick={() => setActiveTabModal("Preferences")}
+              className="flex items-center justify-between w-full py-4 px-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors outline-none cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                  <Sliders className="w-4 h-4" />
+                </div>
+                <span className="font-sans font-semibold text-xs text-slate-900 dark:text-slate-200">Preferences</span>
               </div>
-              <span className="font-sans font-semibold text-xs text-slate-900 dark:text-slate-200">Preferences</span>
-            </div>
-            <ChevronRight className="w-4 h-4 text-slate-500" />
-          </button>
+              <ChevronRight className="w-4 h-4 text-slate-500" />
+            </button>
+          )}
 
           {/* Item 5: About Us */}
           <button
@@ -466,18 +459,20 @@ export default function Settings({ student, onLogout, onProfileUpdate }: Setting
           </button>
 
           {/* Item 6: Help and Support */}
-          <button
-            onClick={() => setActiveTabModal("Help")}
-            className="flex items-center justify-between w-full py-4 px-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors outline-none cursor-pointer"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
-                <HelpCircle className="w-4 h-4" />
+          {appConfig?.enableHelp !== false && (
+            <button
+              onClick={() => setActiveTabModal("Help")}
+              className="flex items-center justify-between w-full py-4 px-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors outline-none cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+                  <HelpCircle className="w-4 h-4" />
+                </div>
+                <span className="font-sans font-semibold text-xs text-slate-900 dark:text-slate-200">Help and Support</span>
               </div>
-              <span className="font-sans font-semibold text-xs text-slate-900 dark:text-slate-200">Help and Support</span>
-            </div>
-            <ChevronRight className="w-4 h-4 text-slate-500" />
-          </button>
+              <ChevronRight className="w-4 h-4 text-slate-500" />
+            </button>
+          )}
 
         </div>
 

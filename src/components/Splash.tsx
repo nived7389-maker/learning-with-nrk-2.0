@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { BookOpen } from "lucide-react";
+import { NrkLogo } from "./NrkLogo";
 import { listenAppConfig } from "../firebase";
 
 interface SplashProps {
@@ -43,7 +43,7 @@ export default function Splash({ onFinish }: SplashProps) {
           {appConfig?.appLogoUrl ? (
             <img src={appConfig.appLogoUrl} alt="App Logo" className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
           ) : (
-            <BookOpen className="w-12 h-12 text-slate-900 dark:text-white" />
+            <NrkLogo className="w-16 h-16" />
           )}
         </motion.div>
 

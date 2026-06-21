@@ -64,6 +64,25 @@
         "customerCarePhone": { "type": "string" }
       },
       "required": ["customerCarePhone"]
+    },
+    "LessonFeedback": {
+      "title": "LessonFeedback",
+      "description": "Feedbacks and ratings submitted by students on educational video lessons.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "studentPhone": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "lessonId": { "type": "string" },
+        "lessonTitle": { "type": "string" },
+        "rating": { "type": "string", "enum": ["Bad", "Average", "Good", "Superb"] },
+        "emoji": { "type": "string" },
+        "feedbackText": { "type": "string" },
+        "submittedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "studentId", "studentName", "rating", "emoji", "submittedAt"]
     }
   },
   "firestore": {
@@ -86,6 +105,10 @@
     "settings/{settingId}": {
       "schema": "AdminSettings",
       "description": "Metadata settings including helpline phones."
+    },
+    "feedbacks/{feedbackId}": {
+      "schema": "LessonFeedback",
+      "description": "Video lesson feedback and rating submissions."
     }
   }
 }

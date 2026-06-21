@@ -9,6 +9,17 @@ export interface Student {
   stream: "Computer Science" | "Biology Science" | "";
   status: "pending" | "approved" | "blocked";
   activeDeviceId?: string;
+  superCoins?: number;
+  performance?: Array<{
+    videoId: string;
+    videoTitle: string;
+    subject: string;
+    watchedFully: boolean;
+    marks: number;
+    totalQuestions: number;
+    completedAt: string;
+    examAttended?: boolean;
+  }>;
 }
 
 export interface PdfAsset {

@@ -669,6 +669,80 @@ export async function fetchAllStudents(): Promise<Student[]> {
   }
 }
 
+// ---------------------------------
+// LESSON FEEDBACK SECTION
+// ---------------------------------
+export interface LessonFeedback {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentPhone: string;
+  subjectId: string;
+  lessonId: string;
+  lessonTitle: string;
+  rating: "Bad" | "Average" | "Good" | "Superb";
+  emoji: string;
+  feedbackText: string;
+  submittedAt: string;
+}
+
+export async function submitLessonFeedback(feedback: Omit<LessonFeedback, "id" | "submittedAt">): Promise<void> {
+  const newId = `fb_${Date.now()}_${feedback.studentId.substring(0, 5)}`;
+  const feedbackDoc: LessonFeedback = {
+    ...feedback,
+    id: newId,
+    submittedAt: new Date().toISOString()
+  };
+
+  if (useLocalMock) {
+    const list = getLocalData<LessonFeedback[]>("lesson_feedbacks", []);
+    list.push(feedbackDoc);
+    setLocalData("lesson_feedbacks", list);
+    return;
+  }
+
+  try {
+    await setDoc(doc(db, "feedbacks", newId), feedbackDoc);
+  } catch (err) {
+    console.error("submitLessonFeedback failed:", err);
+    throw err;
+  }
+}
+
+export async function fetchAllFeedbacks(): Promise<LessonFeedback[]> {
+  if (useLocalMock) {
+    return getLocalData<LessonFeedback[]>("lesson_feedbacks", []);
+  }
+
+  try {
+    const snap = await getDocs(collection(db, "feedbacks"));
+    const list: LessonFeedback[] = [];
+    snap.forEach((docSnap) => {
+      list.push(docSnap.data() as LessonFeedback);
+    });
+    return list.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+  } catch (err) {
+    console.error("fetchAllFeedbacks failed:", err);
+    return [];
+  }
+}
+
+export async function deleteLessonFeedback(id: string): Promise<void> {
+  if (useLocalMock) {
+    const list = getLocalData<LessonFeedback[]>("lesson_feedbacks", []);
+    const updated = list.filter((fb) => fb.id !== id);
+    setLocalData("lesson_feedbacks", updated);
+    return;
+  }
+
+  try {
+    await deleteDoc(doc(db, "feedbacks", id));
+  } catch (err) {
+    console.error("deleteLessonFeedback failed:", err);
+    throw err;
+  }
+}
+
 // Update student verification and stream allocation
 export async function adminApproveStudent(
   uid: string,
@@ -1285,9 +1359,45 @@ export async function fetchAllSubscriptions(): Promise<Subscription[]> {
   }
 }
 
+export async function saveStudentPerformance(
+  uid: string,
+  coins: number,
+  performance: Array<{
+    videoId: string;
+    videoTitle: string;
+    subject: string;
+    watchedFully: boolean;
+    marks: number;
+    totalQuestions: number;
+    completedAt: string;
+  }>
+): Promise<void> {
+  if (useLocalMock) {
+    const students = getLocalData<Student[]>("students", []);
+    const idx = students.findIndex((s) => s.uid === uid);
+    if (idx !== -1) {
+      students[idx].superCoins = coins;
+      students[idx].performance = performance;
+      setLocalData("students", students);
+    }
+    return;
+  }
+
+  try {
+    const docRef = doc(db, "students", uid);
+    await updateDoc(docRef, {
+      superCoins: coins,
+      performance: performance
+    });
+  } catch (err) {
+    console.warn("Could not save student performance details:", err);
+  }
+}
+
 export async function updateAppConfig(config: any): Promise<void> {
   if (useLocalMock) {
-    setLocalData("astr_app_config", config);
+    const oldConfig = getLocalData("astr_app_config", {});
+    setLocalData("astr_app_config", { ...oldConfig, ...config });
     return;
   }
   try {

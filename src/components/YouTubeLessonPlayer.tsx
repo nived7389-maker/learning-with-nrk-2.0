@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Loader2, AlertCircle, RefreshCw, Play, Pause, Volume2, VolumeX, Maximize, Rewind, FastForward, Settings, RotateCw } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw, Play, Pause, Volume2, VolumeX, Maximize, Rewind, FastForward, Settings, RotateCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { updateWatchProgress, markVideoCompleted } from '../lib/videoTracking';
 
 declare global {
@@ -93,8 +93,20 @@ export default function YouTubeLessonPlayer({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showControls, setShowControls] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsSubMenu, setSettingsSubMenu] = useState<'main' | 'speed' | 'quality'>('main');
   const [qualityOptions, setQualityOptions] = useState<string[]>([]);
-  const [currentQuality, setCurrentQuality] = useState('auto');
+  const [currentQuality, setCurrentQuality] = useState('hd720');
+
+  const showSettingsRef = useRef(false);
+  useEffect(() => {
+    showSettingsRef.current = showSettings;
+    if (showSettings) {
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+        controlsTimeoutRef.current = null;
+      }
+    }
+  }, [showSettings]);
   
   const playerRef = useRef<any>(null);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
@@ -313,6 +325,38 @@ export default function YouTubeLessonPlayer({
     };
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in any text box/input
+      const activeEl = document.activeElement as HTMLElement;
+      if (activeEl && (
+        activeEl.tagName === 'INPUT' || 
+        activeEl.tagName === 'TEXTAREA' || 
+        activeEl.isContentEditable
+      )) {
+        return;
+      }
+
+      if (e.key === ' ' || e.key === 'Spacebar') {
+        e.preventDefault();
+        togglePlay();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        skip(-10);
+        triggerDoubleTapFeedback("backward");
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        skip(10);
+        triggerDoubleTapFeedback("forward");
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isPlaying, currentTime, duration, isDirectVideo, videoUrl]);
+
   const onVideoTimeUpdate = () => {
     if (!videoElementRef.current) return;
     const playedSeconds = videoElementRef.current.currentTime;
@@ -325,7 +369,7 @@ export default function YouTubeLessonPlayer({
       if (onProgressUpdate) onProgressUpdate(playedSeconds);
       if (videoUrl) updateWatchProgress(videoUrl, lessonId, chapterId, playedSeconds, dur);
   
-      if (playedFrac >= 0.9 && !completedTriggered) {
+      if (playedFrac >= 0.65 && !completedTriggered) {
         setCompletedTriggered(true);
         if (videoUrl) markVideoCompleted(videoUrl, lessonId, chapterId);
         if (onVideoComplete) onVideoComplete();
@@ -460,6 +504,23 @@ export default function YouTubeLessonPlayer({
       if (levels && levels.length > 0) {
         setQualityOptions(levels);
       }
+      
+      // Set default quality to hd720
+      try {
+        if (typeof event.target.setPlaybackQualityRange === 'function') {
+          event.target.setPlaybackQualityRange('hd720', 'hd720');
+        }
+        if (typeof event.target.setPlaybackQuality === 'function') {
+          event.target.setPlaybackQuality('hd720');
+        }
+        setCurrentQuality('hd720');
+        
+        // Seek to refresh initial dynamic cache
+        const curr = event.target.getCurrentTime();
+        if (typeof curr === 'number' && !isNaN(curr)) {
+          event.target.seekTo(curr, true);
+        }
+      } catch (err) {}
     } catch (err) {}
 
     // Auto-start playback on mount ready condition
@@ -512,7 +573,7 @@ export default function YouTubeLessonPlayer({
       if (onProgressUpdate) onProgressUpdate(playedSeconds);
       if (validVideoId) updateWatchProgress(validVideoId, lessonId, chapterId, playedSeconds, dur);
   
-      if (playedFrac >= 0.9 && !completedTriggered) {
+      if (playedFrac >= 0.65 && !completedTriggered) {
         setCompletedTriggered(true);
         if (validVideoId) markVideoCompleted(validVideoId, lessonId, chapterId);
         if (onVideoComplete) onVideoComplete();
@@ -576,7 +637,9 @@ export default function YouTubeLessonPlayer({
 
   const hideControlsWithDelay = () => {
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    if (showSettingsRef.current) return;
     controlsTimeoutRef.current = setTimeout(() => {
+      if (showSettingsRef.current) return;
       setShowControls(false);
       setShowSettings(false);
     }, 3000);
@@ -675,15 +738,75 @@ export default function YouTubeLessonPlayer({
         playerRef.current.setPlaybackRate(rate);
       }
     }
-    setShowSettings(false);
   };
 
   const changeQuality = (q: string) => {
     setCurrentQuality(q);
     if (playerRef.current) {
-      playerRef.current.setPlaybackQuality(q);
+      try {
+        const curr = playerRef.current.getCurrentTime() || 0;
+        const targetQuality = q === 'auto' ? 'default' : q === 'custom' ? 'medium' : q;
+
+        if (q === 'auto') {
+          if (typeof playerRef.current.setPlaybackQuality === 'function') {
+            playerRef.current.setPlaybackQuality('default');
+          }
+        } else {
+          if (typeof playerRef.current.setPlaybackQualityRange === 'function') {
+            playerRef.current.setPlaybackQualityRange(targetQuality, targetQuality);
+          }
+          if (typeof playerRef.current.setPlaybackQuality === 'function') {
+            playerRef.current.setPlaybackQuality(targetQuality);
+          }
+        }
+
+        // Force YouTube to change quality level by calling loadVideoById or cueVideoById smoothly
+        if (validVideoId && typeof playerRef.current.loadVideoById === 'function') {
+          if (isPlaying) {
+            try {
+              playerRef.current.loadVideoById({
+                videoId: validVideoId,
+                startSeconds: curr,
+                suggestedQuality: targetQuality
+              });
+            } catch (err) {
+              playerRef.current.loadVideoById(validVideoId, curr, targetQuality);
+            }
+          } else {
+            try {
+              playerRef.current.cueVideoById({
+                videoId: validVideoId,
+                startSeconds: curr,
+                suggestedQuality: targetQuality
+              });
+            } catch (err) {
+              playerRef.current.cueVideoById(validVideoId, curr, targetQuality);
+            }
+          }
+        } else {
+          // Fallback buffer refresh
+          if (typeof curr === 'number' && !isNaN(curr)) {
+            playerRef.current.seekTo(curr, true);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to set quality:", e);
+      }
     }
-    setShowSettings(false);
+  };
+
+  const getQualityLabel = (q: string | null | undefined) => {
+    if (!q) return 'Auto';
+    const qStr = String(q).toLowerCase();
+    if (qStr === 'auto' || qStr === 'default') return 'Auto';
+    if (qStr === 'custom') return 'Custom (360p)';
+    if (qStr === 'hd1080') return '1080p';
+    if (qStr === 'hd720') return '720p';
+    if (qStr === 'large') return '480p';
+    if (qStr === 'medium') return '360p';
+    if (qStr === 'small') return '240p';
+    if (qStr === 'tiny') return '144p';
+    return qStr.replace('hd', '').toUpperCase() + 'p';
   };
 
   const toggleRotation = () => {
@@ -844,7 +967,7 @@ export default function YouTubeLessonPlayer({
         {/* Custom Controls Bar */}
         <div 
           className={`absolute bottom-0 left-0 right-0 z-20 px-4 pt-16 pb-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent transition-opacity duration-300 ${
-            showControls || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            showControls || !isPlaying || showSettings ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
           onClick={(e) => e.stopPropagation()} // don't trigger wrapper play/pause
         >
@@ -902,7 +1025,12 @@ export default function YouTubeLessonPlayer({
 
             <div className="flex items-center gap-4 relative animate-none">
               <button 
-                onClick={() => setShowSettings(!showSettings)} 
+                onClick={() => {
+                  setShowSettings(!showSettings);
+                  if (!showSettings) {
+                    setSettingsSubMenu('main');
+                  }
+                }} 
                 className={`text-white hover:text-cyan-400 transition-colors focus:outline-none ${showSettings ? 'rotate-90 text-cyan-400' : ''} duration-300`}
               >
                 <Settings className="w-5 h-5" />
@@ -925,40 +1053,48 @@ export default function YouTubeLessonPlayer({
 
               {/* Settings Dialog */}
               {showSettings && (
-                <div className="absolute bottom-12 right-0 bg-slate-900/95 backdrop-blur-sm border border-white/10 rounded-xl p-3 shadow-2xl min-w-[160px] flex gap-4">
-                  <div>
-                    <div className="text-[10px] text-slate-400 uppercase font-semibold mb-2 px-2">Speed</div>
-                    {[0.5, 0.75, 1, 1.25, 1.5, 2].map(rate => (
+                <div className="absolute bottom-12 right-0 bg-slate-950/95 backdrop-blur-md border border-white/10 rounded-xl p-2.5 shadow-2xl min-w-[200px] flex flex-col z-[50] select-none text-white">
+                  {settingsSubMenu === 'main' && (
+                    <div className="flex flex-col gap-1">
+                      <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-2 px-2">Settings</div>
+                      
+                      {/* Playback Speed Menu Item */}
                       <button 
-                        key={rate}
-                        onClick={() => changePlaybackRate(rate)}
-                        className={`block w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${playbackRate === rate ? 'bg-cyan-500/20 text-cyan-400 font-semibold' : 'text-slate-300 hover:bg-white/5'}`}
+                        onClick={() => setSettingsSubMenu('speed')}
+                        className="flex items-center justify-between w-full px-3 py-2 text-xs rounded-lg text-slate-300 hover:bg-white/10 active:bg-white/15 transition-all text-left cursor-pointer"
                       >
-                        {rate === 1 ? 'Normal' : `${rate}x`}
+                        <span className="font-semibold">Playback Speed</span>
+                        <div className="flex items-center gap-1.5 text-slate-400 font-medium">
+                          <span>{playbackRate === 1 ? 'Normal' : `${playbackRate}x`}</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </div>
                       </button>
-                    ))}
-                  </div>
-                  {qualityOptions.length > 0 && (
-                    <div>
-                      <div className="text-[10px] text-slate-400 uppercase font-semibold mb-2 px-2">Quality</div>
+                    </div>
+                  )}
+
+                  {settingsSubMenu === 'speed' && (
+                    <div className="flex flex-col">
                       <button 
-                        onClick={() => changeQuality('auto')}
-                        className={`block w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${currentQuality === 'auto' ? 'bg-cyan-500/20 text-cyan-400 font-semibold' : 'text-slate-300 hover:bg-white/5'}`}
+                        onClick={() => setSettingsSubMenu('main')}
+                        className="flex items-center gap-2 px-2 py-1.5 mb-1 text-xs text-cyan-400 font-bold hover:text-cyan-300 text-left transition-colors cursor-pointer border-b border-white/5"
                       >
-                        Auto
+                        <ChevronLeft className="w-4 h-4" />
+                        <span>Playback Speed</span>
                       </button>
-                      {qualityOptions.map((q) => {
-                        if (q === 'auto') return null;
-                        return (
+                      <div className="flex flex-col gap-0.5 mt-1">
+                        {[0.5, 0.75, 1, 1.25, 1.5, 2].map(rate => (
                           <button 
-                            key={q}
-                            onClick={() => changeQuality(q)}
-                            className={`block w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${currentQuality === q ? 'bg-cyan-500/20 text-cyan-400 font-semibold' : 'text-slate-300 hover:bg-white/5'}`}
+                            key={rate}
+                            onClick={() => {
+                              changePlaybackRate(rate);
+                            }}
+                            className={`flex items-center justify-between w-full px-3 py-1.5 text-xs rounded-lg transition-colors text-left cursor-pointer ${playbackRate === rate ? 'bg-cyan-500/20 text-cyan-400 font-semibold' : 'text-slate-300 hover:bg-white/5'}`}
                           >
-                            {q.replace('hd', '').replace('small', '240 ').replace('medium', '360 ').replace('large', '480 ').toUpperCase()}
+                            <span>{rate === 1 ? 'Normal (1x)' : `${rate}x`}</span>
+                            {playbackRate === rate && <span className="text-cyan-400 font-mono">✓</span>}
                           </button>
-                        );
-                      })}
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

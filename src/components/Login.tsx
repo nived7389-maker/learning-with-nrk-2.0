@@ -1,6 +1,7 @@
 import React, { useState, FormEvent, useEffect } from "react";
 import { motion } from "motion/react";
-import { KeyRound, BookOpen, AlertCircle, Lock, Phone, User, Sun, Moon } from "lucide-react";
+import { KeyRound, AlertCircle, Lock, Phone, User, Sun, Moon, Eye, EyeOff } from "lucide-react";
+import { NrkLogo } from "./NrkLogo";
 import { loginWithEmail, signUpWithEmail, listenAppConfig } from "../firebase";
 import { Student } from "../types";
 import { useTheme } from "../ThemeContext";
@@ -14,6 +15,9 @@ export default function Login({ onSuccess, onAdminOpen }: LoginProps) {
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [phone, setPhone] = useState("+91");
   const [name, setName] = useState("");
   const [logoClicks, setLogoClicks] = useState(0);
@@ -36,8 +40,12 @@ export default function Login({ onSuccess, onAdminOpen }: LoginProps) {
 
   const handleEmailAuth = async (e: FormEvent) => {
     e.preventDefault();
-    if (!phone || !password || (isSignUp && !name)) {
+    if (!phone || !password || (isSignUp && (!name || !confirmPassword))) {
       setErrorText("Please fill in all fields.");
+      return;
+    }
+    if (isSignUp && password !== confirmPassword) {
+      setErrorText("Passwords do not match. Please re-enter the password accurately.");
       return;
     }
     if (password.length < 8) {
@@ -93,7 +101,7 @@ export default function Login({ onSuccess, onAdminOpen }: LoginProps) {
           {appConfig?.appLogoUrl ? (
             <img src={appConfig.appLogoUrl} alt="App Logo" className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
           ) : (
-            <BookOpen className="w-6 h-6 text-indigo-500" />
+            <NrkLogo className="w-8 h-8" />
           )}
           <span className="font-sans font-extrabold tracking-tight text-slate-900 dark:text-white">Learning with nrk</span>
         </div>
@@ -165,9 +173,9 @@ export default function Login({ onSuccess, onAdminOpen }: LoginProps) {
             />
           </div>
           <div className="flex bg-white dark:bg-white/10 rounded-xl items-center px-4 py-3 border border-slate-200 dark:border-slate-200 dark:border-white/10 shadow-sm">
-            <Lock className="w-5 h-5 text-slate-400 dark:text-white/50 mr-3" />
+            <Lock className="w-5 h-5 text-slate-400 dark:text-white/50 mr-3 shrink-0" />
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="8-digit Password"
@@ -175,7 +183,39 @@ export default function Login({ onSuccess, onAdminOpen }: LoginProps) {
               minLength={8}
               required
             />
+            {password.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="text-slate-400 dark:text-white/50 hover:text-slate-600 dark:hover:text-white/80 focus:outline-none ml-2 shrink-0 cursor-pointer"
+              >
+                {showPassword ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+              </button>
+            )}
           </div>
+          {isSignUp && (
+            <div className="flex bg-white dark:bg-white/10 rounded-xl items-center px-4 py-3 border border-slate-200 dark:border-slate-200 dark:border-white/10 shadow-sm transition-all origin-top scale-y-100">
+              <Lock className="w-5 h-5 text-slate-400 dark:text-white/50 mr-3 shrink-0" />
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm 8-digit Password"
+                className="bg-transparent border-none outline-none w-full text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-white/50 text-sm"
+                minLength={8}
+                required={isSignUp}
+              />
+              {confirmPassword.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="text-slate-400 dark:text-white/50 hover:text-slate-600 dark:hover:text-white/80 focus:outline-none ml-2 shrink-0 cursor-pointer"
+                >
+                  {showConfirmPassword ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+                </button>
+              )}
+            </div>
+          )}
           <motion.button
             whileTap={{ scale: 0.98 }}
             disabled={loading}
@@ -190,7 +230,14 @@ export default function Login({ onSuccess, onAdminOpen }: LoginProps) {
           {isSignUp ? "Already have an account?" : "Don't have an account?"}
           <button 
             type="button" 
-            onClick={() => { setIsSignUp(!isSignUp); setErrorText(""); }}
+            onClick={() => { 
+              setIsSignUp(!isSignUp); 
+              setErrorText(""); 
+              setPassword("");
+              setConfirmPassword("");
+              setShowPassword(false);
+              setShowConfirmPassword(false);
+            }}
             className="ml-1 text-slate-900 dark:text-white underline font-bold outline-none"
           >
             {isSignUp ? "Log in" : "Sign up"}

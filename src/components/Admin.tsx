@@ -24,6 +24,7 @@ import {
   Bell,
   Video,
   Loader2,
+  MessageSquare,
 } from "lucide-react";
 import {
   getAdminDashboardStats,
@@ -53,7 +54,9 @@ import {
   adminUploadVideo,
   adminUpdateVideo,
   adminDeleteVideo,
-  fetchVideos
+  fetchVideos,
+  fetchAllFeedbacks,
+  deleteLessonFeedback
 } from "../firebase";
 import { Student, PdfAsset, BannerAsset, SubjectName, VideoAsset, Subscription } from "../types";
 
@@ -85,12 +88,23 @@ export default function Admin({ onReturn }: AdminProps) {
     | "subject_logos"
     | "pages_config"
     | "notification_config"
+    | "feedbacks"
   >("dashboard");
 
   // App Config
   const [appConfig, setAppConfig] = useState<any>({});
   const [aboutText, setAboutText] = useState("");
   const [helpText, setHelpText] = useState("");
+  const [studentInstructions, setStudentInstructions] = useState("");
+  const [enableAccounts, setEnableAccounts] = useState(true);
+  const [enableSubscriptions, setEnableSubscriptions] = useState(true);
+  const [enableInstructions, setEnableInstructions] = useState(true);
+  const [enablePreferences, setEnablePreferences] = useState(true);
+  const [enableHelp, setEnableHelp] = useState(true);
+  const [enableNotes, setEnableNotes] = useState(true);
+  const [enableVideos, setEnableVideos] = useState(true);
+  const [enableChapterVideos, setEnableChapterVideos] = useState(true);
+  const [bypassSubscriptionGates, setBypassSubscriptionGates] = useState(true);
   const [appLogoUrl, setAppLogoUrl] = useState("");
   const [subjectIcons, setSubjectIcons] = useState<Record<string, string>>({});
   const [notificationTitle, setNotificationTitle] = useState("Notifications");
@@ -108,6 +122,7 @@ export default function Admin({ onReturn }: AdminProps) {
   const [bannersList, setBannersList] = useState<BannerAsset[]>([]);
   const [pdfSyncList, setPdfSyncList] = useState<PdfAsset[]>([]);
   const [microbitSyncList, setMicrobitSyncList] = useState<any[]>([]);
+  const [feedbacksList, setFeedbacksList] = useState<any[]>([]);
 
   const [generalLoading, setGeneralLoading] = useState(false);
   const [actionFeedback, setActionFeedback] = useState("");
@@ -279,15 +294,50 @@ export default function Admin({ onReturn }: AdminProps) {
       setAppConfig(config);
       setAboutText(config.aboutText || "");
       setHelpText(config.helpText || "");
+      setStudentInstructions(config.studentInstructions || "");
+      setEnableAccounts(config.enableAccounts !== false);
+      setEnableSubscriptions(config.enableSubscriptions !== false);
+      setEnableInstructions(config.enableInstructions !== false);
+      setEnablePreferences(config.enablePreferences !== false);
+      setEnableHelp(config.enableHelp !== false);
+      setEnableNotes(config.enableNotes !== false);
+      setEnableVideos(config.enableVideos !== false);
+      setEnableChapterVideos(config.enableChapterVideos !== false);
+      setBypassSubscriptionGates(config.bypassSubscriptionGates !== false);
       setAppLogoUrl(config.appLogoUrl || "");
       setSubjectIcons(config.subjectIcons || {});
       setNotificationTitle(config.notificationTitle || "Notifications");
       setNotifications(config.notifications || []);
+
+      // Load Student Feedbacks list
+      try {
+        const feeds = await fetchAllFeedbacks();
+        setFeedbacksList(feeds);
+      } catch (err) {
+        console.error("Failed to load feedbacks:", err);
+      }
     } catch (e: any) {
       console.error(e);
       setDbError(e.message || "Failed to fetch admin data from Firebase.");
     } finally {
       setGeneralLoading(false);
+    }
+  };
+
+  const handleDeleteFeedback = async (id: string) => {
+    if (!window.confirm("Are you sure you want to permanently delete this student feedback?")) return;
+    try {
+      setGeneralLoading(true);
+      await deleteLessonFeedback(id);
+      setActionFeedback("Feedback deleted successfully!");
+      const feeds = await fetchAllFeedbacks();
+      setFeedbacksList(feeds);
+    } catch (err: any) {
+      console.error("Failed to delete feedback:", err);
+      alert("Error deleting feedback: " + err.message);
+    } finally {
+      setGeneralLoading(false);
+      setTimeout(() => setActionFeedback(""), 3000);
     }
   };
 
@@ -1238,6 +1288,7 @@ export default function Admin({ onReturn }: AdminProps) {
             { id: "pages_config", label: "Global Settings", icon: FileText },
             { id: "subject_logos", label: "Subject Logos", icon: Image },
             { id: "notification_config", label: "Notifications", icon: Bell },
+            { id: "feedbacks", label: "Student Feedbacks", icon: MessageSquare },
           ].map((item) => {
             const Icon = item.icon;
             return (
@@ -2636,10 +2687,10 @@ service cloud.firestore {
             <div className="space-y-6">
               <div className="border-b border-black/5 dark:border-white/5 pb-3">
                 <h2 className="font-sans font-bold text-base text-indigo-300">
-                  Global App Configuration
+                  Global App Configuration & Customization
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Manage static pages and content settings
+                  Manage static pages, student instructions, and available feature switches.
                 </p>
               </div>
 
@@ -2654,6 +2705,17 @@ service cloud.firestore {
                     placeholder="https://...logo.png"
                   />
                   <p className="text-[10px] text-slate-400 mt-1">This will display in the top left corner instead of the default book icon.</p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-2">Student Instructions (Profile Section Text)</label>
+                  <textarea
+                    value={studentInstructions}
+                    onChange={(e) => setStudentInstructions(e.target.value)}
+                    className="w-full h-32 p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-600 outline-none focus:border-indigo-500/50 font-sans"
+                    placeholder="Enter Student Instructions... (use newline for paragraphs)"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">This handles custom lines or full markdown instructions rendered in student profile help guides.</p>
                 </div>
 
                 <div>
@@ -2675,20 +2737,162 @@ service cloud.firestore {
                     placeholder="Enter Help & Support details here..."
                   />
                 </div>
+
+                {/* FEATURE TOGGLES AND SWITCHES GRID */}
+                <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 space-y-4">
+                  <h3 className="text-xs font-black uppercase text-indigo-400 tracking-wider">Configure Student Menu Options / Switches</h3>
+                  <p className="text-[10.5px] text-slate-400 leading-normal">
+                    Turn specific profile tabs and educational material types on/off across the student platform. Note: Making all switches active releases full, unlocked access to all elements.
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    <label className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={enableAccounts} 
+                        onChange={(e) => setEnableAccounts(e.target.checked)} 
+                        className="w-4 h-4 text-emerald-500 rounded border-gray-300 focus:ring-emerald-500" 
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-slate-200 block">Enable My Account tab</span>
+                        <span className="text-[9px] text-slate-500">Allow students to inspect registered info</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={enableSubscriptions} 
+                        onChange={(e) => setEnableSubscriptions(e.target.checked)} 
+                        className="w-4 h-4 text-emerald-500 rounded border-gray-300 focus:ring-emerald-500" 
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-slate-200 block">Enable Subscriptions tab</span>
+                        <span className="text-[9px] text-slate-500">Display studied plans and status</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={enableInstructions} 
+                        onChange={(e) => setEnableInstructions(e.target.checked)} 
+                        className="w-4 h-4 text-emerald-500 rounded border-gray-300 focus:ring-emerald-500" 
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-slate-200 block">Enable Instructions tab</span>
+                        <span className="text-[9px] text-slate-500">Allow student instructions in settings</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={enablePreferences} 
+                        onChange={(e) => setEnablePreferences(e.target.checked)} 
+                        className="w-4 h-4 text-emerald-500 rounded border-gray-300 focus:ring-emerald-500" 
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-slate-200 block">Enable Preferences tab</span>
+                        <span className="text-[9px] text-slate-500">Toggle alerts, speed levels, layouts</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={enableHelp} 
+                        onChange={(e) => setEnableHelp(e.target.checked)} 
+                        className="w-4 h-4 text-emerald-500 rounded border-gray-300 focus:ring-emerald-500" 
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-slate-200 block">Enable Help support tab</span>
+                        <span className="text-[9px] text-slate-500">Display technical backup helplines</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={bypassSubscriptionGates} 
+                        onChange={(e) => setBypassSubscriptionGates(e.target.checked)} 
+                        className="w-4 h-4 text-emerald-500 rounded border-gray-300 focus:ring-emerald-500" 
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-slate-200 block">Bypass Subscription Gates</span>
+                        <span className="text-[9px] text-slate-500 font-mono text-emerald-400">Makes all Notes & Videos 100% available</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={enableNotes} 
+                        onChange={(e) => setEnableNotes(e.target.checked)} 
+                        className="w-4 h-4 text-emerald-500 rounded border-gray-300 focus:ring-emerald-500" 
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-slate-200 block">Available Notes</span>
+                        <span className="text-[9px] text-slate-500">Allow view/download of PDF files</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={enableVideos} 
+                        onChange={(e) => setEnableVideos(e.target.checked)} 
+                        className="w-4 h-4 text-emerald-500 rounded border-gray-300 focus:ring-emerald-500" 
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-slate-200 block">Available Video lectures</span>
+                        <span className="text-[9px] text-slate-500">Display and stream video content lists</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={enableChapterVideos} 
+                        onChange={(e) => setEnableChapterVideos(e.target.checked)} 
+                        className="w-4 h-4 text-emerald-500 rounded border-gray-300 focus:ring-emerald-500" 
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-slate-200 block">Available Chapter-wise Videos</span>
+                        <span className="text-[9px] text-slate-500">Group and watch parts by chapter index</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
                 
                 <button
                   onClick={async () => {
                     try {
-                      await updateAppConfig({ aboutText, helpText, subjectIcons, appLogoUrl });
-                      triggerToast("Pages Configuration Updated!");
+                      await updateAppConfig({ 
+                        aboutText, 
+                        helpText, 
+                        studentInstructions, 
+                        enableAccounts,
+                        enableSubscriptions,
+                        enableInstructions,
+                        enablePreferences,
+                        enableHelp,
+                        enableNotes,
+                        enableVideos,
+                        enableChapterVideos,
+                        bypassSubscriptionGates,
+                        subjectIcons, 
+                        appLogoUrl 
+                      });
+                      triggerToast("Pages & Feature Toggles Configuration Updated!");
                     } catch (e) {
                       console.error(e);
                       alert("Failed to save config.");
                     }
                   }}
-                  className="w-full h-11 rounded-xl bg-indigo-600 text-white font-sans font-bold text-xs hover:bg-indigo-500 transition-colors shadow-lg cursor-pointer flex items-center justify-center"
+                  className="w-full h-11 rounded-xl bg-indigo-600 text-white font-sans font-bold text-xs hover:bg-indigo-500 transition-colors shadow-lg cursor-pointer flex items-center justify-center border-none"
                 >
-                  Save Pages Configuration
+                  Save Global Configuration settings
                 </button>
               </div>
             </div>
@@ -2847,6 +3051,112 @@ service cloud.firestore {
                 >
                   Save Notification Settings
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 9: STUDENT LESSON FEEDBACKS */}
+          {activeTab === "feedbacks" && (
+            <div className="space-y-6 animate-fade-in" id="feedbacks-management-panel">
+              <div className="border-b border-black/5 dark:border-white/5 pb-3">
+                <h2 className="font-sans font-bold text-base text-indigo-300 flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-indigo-400" />
+                  Student Lesson Feedbacks
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Review ratings, emojis, opinions, and core feedbacks from students about dynamic chapters and lectures.
+                </p>
+              </div>
+
+              {/* Status breakdown widgets */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: "😞 Bad Rating", count: feedbacksList.filter((f) => f.rating === "Bad").length, color: "text-rose-500 bg-rose-500/10 border-rose-500/10" },
+                  { label: "😐 Average Rating", count: feedbacksList.filter((f) => f.rating === "Average").length, color: "text-amber-500 bg-amber-500/10 border-amber-500/10" },
+                  { label: "🙂 Good Rating", count: feedbacksList.filter((f) => f.rating === "Good").length, color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/10" },
+                  { label: "🤩 Superb Rating", count: feedbacksList.filter((f) => f.rating === "Superb").length, color: "text-cyan-500 bg-cyan-500/10 border-cyan-500/10" }
+                ].map((item, idx) => (
+                  <div key={idx} className={`p-4 rounded-2xl border text-center ${item.color}`}>
+                    <div className="text-[10px] font-mono uppercase tracking-wider opacity-85">{item.label}</div>
+                    <div className="text-2xl font-bold mt-1">{item.count}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Feedbacks Listing */}
+              <div className="space-y-4">
+                {feedbacksList.length === 0 ? (
+                  <div className="border border-dashed border-slate-350 dark:border-white/5 rounded-2xl p-10 text-center text-slate-400">
+                    <MessageSquare className="w-10 h-10 mx-auto opacity-20 mb-3" />
+                    <p className="text-xs">No user ratings submitted yet for any dynamic video session.</p>
+                  </div>
+                ) : (
+                  [...feedbacksList]
+                    .sort((a, b) => new Date(b.createdAt || b.submittedAt || 0).getTime() - new Date(a.createdAt || a.submittedAt || 0).getTime())
+                    .map((item) => {
+                      const badgeColors: Record<string, string> = {
+                        Bad: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30",
+                        Average: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30",
+                        Good: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
+                        Superb: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30"
+                      };
+                      return (
+                        <div
+                          key={item.id}
+                          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow relative"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3 mb-3.5">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="text-xs font-bold text-slate-800 dark:text-white">
+                                  {item.studentName || "Anonymous Student"}
+                                </h4>
+                                <span className="text-[10px] text-slate-600 dark:text-slate-450 font-mono">
+                                  ({item.studentPhone || "No Phone"})
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
+                                <span className="bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-md font-medium text-slate-600 dark:text-slate-300">
+                                  Subject: {item.subjectId}
+                                </span>
+                                <span>•</span>
+                                <span className="font-semibold text-slate-700 dark:text-slate-350">
+                                  Lesson: {item.lessonTitle}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Badge with chosen rating and animated-like presentation */}
+                            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-bold ${badgeColors[item.rating] || "bg-indigo-500/10 text-indigo-400 border-indigo-500/25"}`}>
+                              <span className="text-xs inline-block animate-pulse">{item.emoji || "⭐"}</span>
+                              <span>{item.rating}</span>
+                            </div>
+                          </div>
+
+                          {/* Typed Feedback Content Block */}
+                          <div className="p-3 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-100 dark:border-white/5">
+                            <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed italic">
+                              {item.feedbackText ? `"${item.feedbackText}"` : "Rated without written comment."}
+                            </p>
+                          </div>
+
+                          <div className="mt-3.5 pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between">
+                            <button
+                              onClick={() => handleDeleteFeedback(item.id)}
+                              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-405 hover:bg-rose-500/20 active:bg-rose-500/30 text-xs font-semibold select-none cursor-pointer transition-colors"
+                              title="Delete this feedback permanently"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Delete permanently</span>
+                            </button>
+                            <div className="text-[9px] font-mono text-slate-500 dark:text-slate-400">
+                              Submitted at: {new Date(item.createdAt || item.submittedAt || Date.now()).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
               </div>
             </div>
           )}
