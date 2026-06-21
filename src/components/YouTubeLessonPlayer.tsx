@@ -112,6 +112,7 @@ export default function YouTubeLessonPlayer({
   const holdTimeoutRef = useRef<any>(null);
   const is2xHoldingRef = useRef<boolean>(false);
   const lastTapTimeRef = useRef<number>(0);
+  const lastTouchTimeRef = useRef<number>(0);
   const overlayRef = useRef<HTMLDivElement>(null);
 
   const triggerDoubleTapFeedback = (direction: "forward" | "backward") => {
@@ -203,15 +204,24 @@ export default function YouTubeLessonPlayer({
 
   const onMouseDownOverlay = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
+    if (Date.now() - lastTouchTimeRef.current < 800) {
+      return;
+    }
     handlePointerStart(e.clientX);
   };
 
   const onMouseUpOverlay = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
+    if (Date.now() - lastTouchTimeRef.current < 800) {
+      return;
+    }
     handlePointerEnd(e.clientX);
   };
 
   const onMouseLeaveOverlay = () => {
+    if (Date.now() - lastTouchTimeRef.current < 800) {
+      return;
+    }
     if (is2xHoldingRef.current) {
       is2xHoldingRef.current = false;
       setIsHolding2x(false);
@@ -233,12 +243,14 @@ export default function YouTubeLessonPlayer({
   };
 
   const onTouchStartOverlay = (e: React.TouchEvent<HTMLDivElement>) => {
+    lastTouchTimeRef.current = Date.now();
     if (e.touches && e.touches.length > 0) {
       handlePointerStart(e.touches[0].clientX);
     }
   };
 
   const onTouchEndOverlay = (e: React.TouchEvent<HTMLDivElement>) => {
+    lastTouchTimeRef.current = Date.now();
     if (e.changedTouches && e.changedTouches.length > 0) {
       handlePointerEnd(e.changedTouches[0].clientX);
     }
