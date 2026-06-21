@@ -113,6 +113,7 @@ export default function YouTubeLessonPlayer({
   const is2xHoldingRef = useRef<boolean>(false);
   const lastTapTimeRef = useRef<number>(0);
   const lastTouchTimeRef = useRef<number>(0);
+  const singleTapTimeoutRef = useRef<any>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
   const triggerDoubleTapFeedback = (direction: "forward" | "backward") => {
@@ -130,7 +131,12 @@ export default function YouTubeLessonPlayer({
     const now = Date.now();
     const timeSinceLastTap = now - lastTapTimeRef.current;
 
-    if (timeSinceLastTap < 300) {
+    // Check if double tap
+    if (timeSinceLastTap < 300 && lastTapTimeRef.current !== 0) {
+      if (singleTapTimeoutRef.current) {
+        clearTimeout(singleTapTimeoutRef.current);
+        singleTapTimeoutRef.current = null;
+      }
       if (holdTimeoutRef.current) {
         clearTimeout(holdTimeoutRef.current);
         holdTimeoutRef.current = null;
@@ -190,15 +196,23 @@ export default function YouTubeLessonPlayer({
       return;
     }
 
+    if (lastTapTimeRef.current === 0) {
+      // It was a double-tap/skip event, so do not toggle controls
+      return;
+    }
+
     const pressDuration = lastTapTimeRef.current ? Date.now() - lastTapTimeRef.current : 0;
     if (pressDuration < 350) {
-      setShowControls((prev) => {
-        const nextState = !prev;
-        if (nextState && isPlaying) {
-          hideControlsWithDelay();
-        }
-        return nextState;
-      });
+      if (singleTapTimeoutRef.current) clearTimeout(singleTapTimeoutRef.current);
+      singleTapTimeoutRef.current = setTimeout(() => {
+        setShowControls((prev) => {
+          const nextState = !prev;
+          if (nextState && isPlaying) {
+            hideControlsWithDelay();
+          }
+          return nextState;
+        });
+      }, 250);
     }
   };
 
@@ -553,6 +567,9 @@ export default function YouTubeLessonPlayer({
   };
 
   const handleMouseMove = () => {
+    if (Date.now() - lastTouchTimeRef.current < 1000) {
+      return;
+    }
     setShowControls(true);
     if (isPlaying) hideControlsWithDelay();
   };
@@ -719,7 +736,6 @@ export default function YouTubeLessonPlayer({
     <div 
       ref={wrapperRef}
       onMouseMove={handleMouseMove}
-      onTouchStart={handleMouseMove}
       onMouseLeave={() => isPlaying && setShowControls(false)}
       onContextMenu={handleContextMenu}
       className={`relative w-full aspect-video bg-black rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 group select-none ${
@@ -807,63 +823,23 @@ export default function YouTubeLessonPlayer({
 
         {/* Double click/tap rewind visual feedback overlay */}
         {doubleTapFeedback === "backward" && (
-          <div className="absolute left-0 top-0 bottom-0 w-1/2 bg-white/5 backdrop-blur-[1px] z-[15] flex flex-col items-center justify-center text-white pointer-events-none transition-all duration-300 rounded-l-3xl">
-            <div className="p-4 bg-black/50 rounded-full mb-2 border border-white/5 shadow-xl">
-              <Rewind className="w-8 h-8 text-cyan-400" />
+          <div className="absolute left-0 top-0 bottom-0 w-1/2 bg-cyan-500/10 backdrop-blur-[1px] z-[15] flex flex-col items-center justify-center text-white pointer-events-none transition-all duration-300 rounded-l-3xl animate-pulse">
+            <div className="p-4 bg-black/60 rounded-full mb-2 border border-cyan-500/20 shadow-xl shadow-cyan-500/10 scale-110">
+              <Rewind className="w-8 h-8 text-cyan-400 fill-current animate-bounce" />
             </div>
-            <span className="text-xs font-semibold text-slate-200">Rewind 10 Secs</span>
+            <span className="text-xs font-semibold text-cyan-400 tracking-wider uppercase">Rewind 10s</span>
           </div>
         )}
 
         {/* Double click/tap fast-forward visual feedback overlay */}
         {doubleTapFeedback === "forward" && (
-          <div className="absolute right-0 top-0 bottom-0 w-1/2 bg-white/5 backdrop-blur-[1px] z-[15] flex flex-col items-center justify-center text-white pointer-events-none transition-all duration-300 rounded-r-3xl">
-            <div className="p-4 bg-black/50 rounded-full mb-2 border border-white/5 shadow-xl">
-              <FastForward className="w-8 h-8 text-cyan-400" />
+          <div className="absolute right-0 top-0 bottom-0 w-1/2 bg-cyan-500/10 backdrop-blur-[1px] z-[15] flex flex-col items-center justify-center text-white pointer-events-none transition-all duration-300 rounded-r-3xl animate-pulse">
+            <div className="p-4 bg-black/60 rounded-full mb-2 border border-cyan-500/20 shadow-xl shadow-cyan-500/10 scale-110">
+              <FastForward className="w-8 h-8 text-cyan-400 fill-current animate-bounce" />
             </div>
-            <span className="text-xs font-semibold text-slate-200">Forward 10 Secs</span>
+            <span className="text-xs font-semibold text-cyan-400 tracking-wider uppercase">Forward 10s</span>
           </div>
         )}
-
-        {/* Center UI Controls Overlay */}
-        <div 
-          className={`absolute inset-0 flex items-center justify-center z-[25] pointer-events-none transition-opacity duration-300 ${
-            showControls || !isPlaying ? 'opacity-100' : 'opacity-0'
-          }`}
-        >
-          <div className="flex items-center gap-6 sm:gap-10 pointer-events-auto">
-            {/* Skip Back button */}
-            <button 
-              onClick={(e) => { e.stopPropagation(); skip(-10); }}
-              className="w-12 h-12 sm:w-16 sm:h-16 bg-black/60 hover:bg-black/85 backdrop-blur-sm border border-white/10 rounded-full flex items-center justify-center text-white transition-all transform active:scale-90 hover:scale-110 shadow-lg cursor-pointer"
-              title="Rewind 10 seconds"
-            >
-              <Rewind className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
-            </button>
-
-            {/* Play/Pause button */}
-            <button 
-              onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-              className="w-16 h-16 sm:w-20 sm:h-20 bg-cyan-500 hover:bg-cyan-400 border border-white/25 rounded-full flex items-center justify-center text-white shadow-xl shadow-cyan-500/25 transition-all transform active:scale-90 hover:scale-115 cursor-pointer"
-              title={isPlaying ? "Pause" : "Play"}
-            >
-              {isPlaying ? (
-                <Pause className="w-6 h-6 sm:w-8 sm:h-8 fill-current" />
-              ) : (
-                <Play className="w-6 h-6 sm:w-8 sm:h-8 fill-current ml-1" />
-              )}
-            </button>
-
-            {/* Skip Forward button */}
-            <button 
-              onClick={(e) => { e.stopPropagation(); skip(10); }}
-              className="w-12 h-12 sm:w-16 sm:h-16 bg-black/60 hover:bg-black/85 backdrop-blur-sm border border-white/10 rounded-full flex items-center justify-center text-white transition-all transform active:scale-90 hover:scale-110 shadow-lg cursor-pointer"
-              title="Forward 10 seconds"
-            >
-              <FastForward className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
-            </button>
-          </div>
-        </div>
 
         {/* Custom Controls Bar */}
         <div 
