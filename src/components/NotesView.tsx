@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { 
-  FileText, Search, Download, Eye, BookOpen, ArrowLeft, ArrowRight
+  FileText, Search, Download, Eye, BookOpen, ArrowLeft, ArrowRight, AlertCircle, Phone
 } from "lucide-react";
-import { Student, PdfAsset } from "../types";
-import { fetchPDFs } from "../firebase";
+import { Student, PdfAsset, Subscription } from "../types";
+import { fetchPDFs, listenToUserSubscription, listenAppConfig } from "../firebase";
 import { motion, AnimatePresence } from "motion/react";
 
 interface NotesViewProps {
@@ -16,6 +16,28 @@ export default function NotesView({ student }: NotesViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [viewingPdf, setViewingPdf] = useState<PdfAsset | null>(null);
   const [activeSubject, setActiveSubject] = useState<string | null>(null);
+  const [appConfig, setAppConfig] = useState<any>({});
+  const [subState, setSubState] = useState<Subscription | null>(null);
+  const [showSubUpgradeModal, setShowSubUpgradeModal] = useState(false);
+
+  useEffect(() => {
+    if (!student) return;
+    const unsubConfig = listenAppConfig((config) => {
+      setAppConfig(config);
+    });
+    const unsubSub = listenToUserSubscription(student.uid, (sub) => {
+      if (sub) {
+        setSubState(sub);
+      } else {
+        setSubState(null);
+      }
+    });
+
+    return () => {
+      unsubConfig();
+      unsubSub();
+    };
+  }, [student]);
 
   useEffect(() => {
     if (student?.class && student?.stream) {
@@ -44,16 +66,81 @@ export default function NotesView({ student }: NotesViewProps) {
 
   const availableSubjects = Object.keys(groupedPdfs);
 
+  const checkAccess = () => {
+    const bypass = appConfig?.bypassSubscriptionGates === true;
+    const isSubscribed = subState?.status === "active";
+    if ((student?.status === "pending" || !isSubscribed) && !bypass) {
+      setShowSubUpgradeModal(true);
+      return false;
+    }
+    return true;
+  };
+
   const handleDownloadPdf = (pdf: PdfAsset) => {
+    if (!checkAccess()) return;
     window.open(pdf.pdfUrl, "_blank");
   };
 
   const handleViewPdf = (pdf: PdfAsset) => {
+    if (!checkAccess()) return;
     setViewingPdf(pdf);
   };
 
   return (
     <div className="px-5 py-6 pb-24">
+      <AnimatePresence>
+        {/* SUB UPGRADE BLOCKED POPUP MODAL */}
+        {showSubUpgradeModal && (
+          <motion.div
+            id="sub-upgrade-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-white dark:bg-black/60 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white dark:bg-slate-900 border border-indigo-500/20 rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl relative overflow-hidden"
+            >
+              <div className="w-16 h-16 bg-pink-100 dark:bg-pink-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-pink-200 dark:border-pink-500/20 shadow-inner">
+                <AlertCircle className="w-7 h-7 text-pink-400" />
+              </div>
+              
+              <h3 className="font-sans font-bold text-lg text-slate-900 dark:text-white mb-2">
+                {student?.status === "pending" ? "Subscribe to Unlock" : "Access Blocked"}
+              </h3>
+              <p className="font-sans text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-6">
+                {student?.status === "pending" 
+                  ? "Your account is currently pending. Please subscribe to gain full access to all subjects, study materials, and the AI Assistant."
+                  : "Only active subscribers can access premium features like study materials and the AI Assistant. Please subscribe to activate your premium benefits."}
+              </p>
+
+              <div className="flex flex-col gap-2.5">
+                <button
+                  id="subscribe-popup-btn"
+                  onClick={() => {
+                    const message = `Halo, I want a subscription to Learning with NRK.`;
+                    window.open(`https://wa.me/918848198680?text=${encodeURIComponent(message)}`, "_blank");
+                  }}
+                  className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-sans font-bold text-sm shadow-[0_0_15px_rgba(16,185,129,0.4)] hover:shadow-[0_0_20px_rgba(16,185,129,0.6)] active:scale-95 transition-all text-center"
+                >
+                  <Phone className="w-4 h-4" />
+                  Subscribe Now
+                </button>
+                <button
+                  onClick={() => setShowSubUpgradeModal(false)}
+                  className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-sans font-semibold text-xs hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="mb-6 flex gap-3.5 items-center">
         {activeSubject ? (
           <button 

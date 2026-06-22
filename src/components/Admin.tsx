@@ -104,7 +104,7 @@ export default function Admin({ onReturn }: AdminProps) {
   const [enableNotes, setEnableNotes] = useState(true);
   const [enableVideos, setEnableVideos] = useState(true);
   const [enableChapterVideos, setEnableChapterVideos] = useState(true);
-  const [bypassSubscriptionGates, setBypassSubscriptionGates] = useState(true);
+  const [bypassSubscriptionGates, setBypassSubscriptionGates] = useState(false);
   const [appLogoUrl, setAppLogoUrl] = useState("");
   const [subjectIcons, setSubjectIcons] = useState<Record<string, string>>({});
   const [notificationTitle, setNotificationTitle] = useState("Notifications");
@@ -303,7 +303,7 @@ export default function Admin({ onReturn }: AdminProps) {
       setEnableNotes(config.enableNotes !== false);
       setEnableVideos(config.enableVideos !== false);
       setEnableChapterVideos(config.enableChapterVideos !== false);
-      setBypassSubscriptionGates(config.bypassSubscriptionGates !== false);
+      setBypassSubscriptionGates(config.bypassSubscriptionGates === true);
       setAppLogoUrl(config.appLogoUrl || "");
       setSubjectIcons(config.subjectIcons || {});
       setNotificationTitle(config.notificationTitle || "Notifications");

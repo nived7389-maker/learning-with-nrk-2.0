@@ -7,7 +7,7 @@ import {
   ArrowLeft, FileText, CheckCircle2, ChevronRight, HelpCircle,
   Cpu, Dna, BookA, Languages, PenTool, Pi, Phone, Video,
   Play, Pause, FastForward, Rewind, Maximize, Brain, Send, ExternalLink,
-  Coins, Award, Zap, RotateCcw, Check, X
+  Coins, Award, Zap, RotateCcw, Check, X, Lock
 } from "lucide-react";
 import { Student, PdfAsset, BannerAsset, Subscription } from "../types";
 import { fetchBanners, fetchPDFs, listenToUserSubscription, listenAppConfig, fetchMicrobits, fetchVideos, submitLessonFeedback, saveStudentPerformance } from "../firebase";
@@ -702,27 +702,32 @@ Your response MUST be a valid JSON array of exactly 6 question objects conformin
                 <AlertCircle className="w-7 h-7 text-pink-400" />
               </div>
               
-              <h3 className="font-sans font-bold text-lg text-slate-900 dark:text-white mb-2">Access Blocked</h3>
+              <h3 className="font-sans font-bold text-lg text-slate-900 dark:text-white mb-2">
+                {student.status === "pending" ? "Subscribe to Unlock" : "Access Blocked"}
+              </h3>
               <p className="font-sans text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-6">
-                Only active subscribers can access premium features like study materials and the AI Assistant. Please subscribe to activate your premium benefits.
+                {student.status === "pending" 
+                  ? "Your account is currently pending. Please subscribe to gain full access to all subjects, study materials, and the AI Assistant."
+                  : "Only active subscribers can access premium features like study materials and the AI Assistant. Please subscribe to activate your premium benefits."}
               </p>
 
               <div className="flex flex-col gap-2.5">
                 <button
+                  id="subscribe-popup-btn"
                   onClick={() => {
-                    const message = `want a subscription`;
+                    const message = `Halo, I want a subscription to Learning with NRK.`;
                     window.open(`https://wa.me/918848198680?text=${encodeURIComponent(message)}`, "_blank");
                   }}
-                  className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-emerald-600 text-white font-sans font-semibold text-xs hover:bg-emerald-500 active:scale-95 transition-all text-center"
+                  className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-sans font-bold text-sm shadow-[0_0_15px_rgba(16,185,129,0.4)] hover:shadow-[0_0_20px_rgba(16,185,129,0.6)] active:scale-95 transition-all text-center"
                 >
                   <Phone className="w-4 h-4" />
-                  Subscribe
+                  Subscribe Now
                 </button>
                 <button
                   onClick={() => setShowSubUpgradeModal(false)}
                   className="w-full py-2.5 rounded-xl bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-300 font-sans font-medium text-xs hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all"
                 >
-                  Dismiss
+                  Cancel
                 </button>
               </div>
             </motion.div>
@@ -1412,6 +1417,27 @@ Your response MUST be a valid JSON array of exactly 6 question objects conformin
               </span>
             </div>
           </motion.div>
+
+          {/* Explicit Pending Status Banner */}
+          {student.status === "pending" && (
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.05 }}
+              className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-[0_0_15px_rgba(245,158,11,0.1)]"
+            >
+              <div>
+                <h4 className="font-sans font-bold text-amber-500 text-sm mb-0.5">Account Subscription Pending</h4>
+                <p className="font-sans text-xs text-amber-500/80 leading-relaxed">Your account currently has limited access. Please subscribe to gain full access.</p>
+              </div>
+              <button
+                onClick={() => setShowSubUpgradeModal(true)}
+                className="shrink-0 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-sans font-bold text-xs px-4 py-2 rounded-xl shadow-lg active:scale-95 transition-all"
+              >
+                View Subscription
+              </button>
+            </motion.div>
+          )}
 
           {/* Dynamic Slider Banner Managed by Admin */}
           <motion.div 
