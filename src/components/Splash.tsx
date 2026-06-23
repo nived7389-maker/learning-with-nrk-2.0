@@ -1,63 +1,85 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
+import { NrkLogo } from "./NrkLogo";
+import { listenAppConfig } from "../firebase";
 
 interface SplashProps {
   onFinish: () => void;
 }
 
 export default function Splash({ onFinish }: SplashProps) {
-  const imageUrl = "https://yt3.ggpht.com/xJpGJuIziUdKyklfIXJxWhpAkAPbDaCwRCkTtIW4rXPD1wXK_dIjvWdex5saW5WXhCy7EMTfGJvd=s1870-nd-v1";
+  const [appConfig, setAppConfig] = useState<any>({});
+
+  useEffect(() => {
+    const unsub = listenAppConfig((config) => setAppConfig(config));
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       onFinish();
-    }, 3000);
+    }, 2800);
     return () => clearTimeout(timer);
   }, [onFinish]);
 
   return (
-    <motion.div
+    <div
       id="splash-screen"
-      initial={{ opacity: 1 }}
-      exit={{ 
-        opacity: 0, 
-        scale: 1.02,
-        filter: "blur(8px)",
-        transition: { duration: 0.6, ease: [0.25, 1, 0.5, 1] }
-      }}
-      className="fixed inset-0 z-[9999] bg-[#070b13] text-white overflow-hidden select-none"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-b from-[#0852c4] via-[#3c14a4] to-[#7404a4] text-slate-900 dark:text-white overflow-hidden"
     >
-      {/* Full-screen Splash Image (resized and formatted to cover entire viewport) */}
-      <motion.div
-        initial={{ scale: 1.05, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-        className="absolute inset-0 w-full h-full"
-      >
-        <img 
-          src={imageUrl} 
-          alt="Learning with NRK" 
-          className="w-full h-full object-cover select-none"
-          referrerPolicy="no-referrer"
-        />
-      </motion.div>
+      {/* Sparkles / Ambient light effects */}
+      <div className="absolute top-[20%] left-[10%] w-72 h-72 rounded-full bg-blue-400 opacity-20 blur-3xl animate-pulse" />
+      <div className="absolute bottom-[20%] right-[10%] w-72 h-72 rounded-full bg-purple-500 opacity-20 blur-3xl animate-pulse" />
 
-      {/* Gradient overlay at the bottom for loader accessibility */}
-      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#070b13]/80 via-[#070b13]/30 to-transparent pointer-events-none" />
+      <div className="relative z-10 flex flex-col items-center text-center">
+        {/* Animated Icon Circle */}
+        <motion.div
+          id="splash-logo-container"
+          initial={{ scale: 0.3, opacity: 0, rotate: -20 }}
+          animate={{ scale: [1, 1.1, 1], opacity: 1, rotate: 0 }}
+          transition={{ duration: 1.5, ease: "easeInOut" }}
+          className="flex items-center justify-center w-24 h-24 rounded-3xl bg-black/5 dark:bg-white/10 backdrop-blur-md shadow-2xl border border-slate-300 dark:border-white/20 mb-6 overflow-hidden"
+        >
+          {appConfig?.appLogoUrl ? (
+            <img src={appConfig.appLogoUrl} alt="App Logo" className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
+          ) : (
+            <NrkLogo className="w-16 h-16" />
+          )}
+        </motion.div>
 
-      {/* Loading control layer */}
-      <div className="absolute bottom-16 left-0 right-0 z-10 flex flex-col items-center">
-        {/* Sleek, minimalist linear loading bar */}
-        <div className="w-64 h-1.5 bg-white/20 backdrop-blur-md rounded-full overflow-hidden relative shadow-[0_2px_12px_rgba(0,0,0,0.5)] border border-white/10">
-          <motion.div
-            id="splash-progress-loader"
-            initial={{ width: "0%" }}
-            animate={{ width: "100%" }}
-            transition={{ duration: 3.0, ease: "linear" }}
-            className="h-full bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 rounded-full shadow-[0_0_8px_rgba(52,211,153,0.6)]"
-          />
-        </div>
+        {/* Animated App Name Title */}
+        <motion.h1
+          id="splash-title"
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.6, duration: 0.8 }}
+          className="font-sans font-bold text-3xl md:text-4xl tracking-tight leading-none mb-2"
+        >
+          Learning With NRK
+        </motion.h1>
+
+        {/* Course stream indicator */}
+        <motion.p
+          id="splash-subtitle"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.8 }}
+          transition={{ delay: 1.2, duration: 0.8 }}
+          className="font-mono text-xs tracking-wider uppercase text-blue-200"
+        >
+          Kerala Syllabus Higher Secondary Science
+        </motion.p>
       </div>
-    </motion.div>
+
+      {/* Loading bottom bar */}
+      <div className="absolute bottom-16 left-1/2 -translate-x-1/2 w-48 h-1 bg-white/20 rounded-full overflow-hidden">
+        <motion.div
+          id="splash-loading-bar"
+          initial={{ x: "-100%" }}
+          animate={{ x: "100%" }}
+          transition={{ duration: 2.2, repeat: 0, ease: "easeInOut" }}
+          className="w-full h-full bg-gradient-to-r from-blue-400 to-purple-400"
+        />
+      </div>
+    </div>
   );
 }
