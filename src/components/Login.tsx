@@ -80,8 +80,12 @@ export default function Login({ onSuccess, onAdminOpen }: LoginProps) {
   };
 
   return (
-    <div
+    <motion.div
       id="login-screen"
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.98 }}
+      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       className="relative flex flex-col justify-between min-h-screen px-6 py-12 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white select-none overflow-y-auto"
     >
       {/* Top action bar */}
@@ -252,6 +256,6 @@ export default function Login({ onSuccess, onAdminOpen }: LoginProps) {
           Govt of Kerala Higher Secondary Education
         </span>
       </div>
-    </div>
+    </motion.div>
   );
 }
