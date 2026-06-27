@@ -16,8 +16,10 @@ import NotesView from "./components/NotesView";
 import MicroBit from "./components/MicroBit";
 import { PaperCutsIcon } from "./components/PaperCutsIcon";
 import Onboarding from "./components/Onboarding";
+import Splash from "./components/Splash";
 
 export default function App() {
+  const [isSplashTimerActive, setIsSplashTimerActive] = useState(true);
   const [sessionState, setSessionState] = useState<"splash" | "login" | "waiting" | "portal" | "admin">("splash");
   const [currentUser, setCurrentUser] = useState<Student | null>(null);
   const [currentTab, setCurrentTab] = useState<"home" | "settings" | "video" | "microbit">("home");
@@ -243,9 +245,12 @@ export default function App() {
   return (
     <div className="relative min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white selection:bg-indigo-500/30 selection:text-slate-900 dark:text-white">
       <AnimatePresence mode="wait">
-        
-        {/* Onboarding Flow */}
-        {showOnboarding && sessionState === "portal" && (
+        {isSplashTimerActive ? (
+          <Splash key="custom-splash" onFinish={() => setIsSplashTimerActive(false)} />
+        ) : (
+          <>
+            {/* Onboarding Flow */}
+            {showOnboarding && sessionState === "portal" && (
           <Onboarding 
             onComplete={() => setShowOnboarding(false)} 
             onCancel={() => setShowOnboarding(false)} 
@@ -604,6 +609,8 @@ export default function App() {
               </>
             )}
           </motion.div>
+        )}
+          </>
         )}
 
       </AnimatePresence>

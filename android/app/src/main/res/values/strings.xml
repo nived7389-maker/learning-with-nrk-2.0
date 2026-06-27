@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Learning With NRK</string>
+    <string name="title_activity_main">Learning With NRK</string>
+    <string name="package_name">com.learningwithnrk.app</string>
+    <string name="custom_url_scheme">com.learningwithnrk.app</string>
+</resources>
